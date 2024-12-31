@@ -1,0 +1,11 @@
+
+# How accurate should bow aim be? The lower the number, the more accurate. Must be >= 0 and <= 1.
+accuracy: 0.7
+
+# Nerf Entities (Only 3 entities are supported: bogged", skeleton, and stray)
+bogged: true
+skeleton: true
+stray: true
+
+# Debug Mode
+debug: false

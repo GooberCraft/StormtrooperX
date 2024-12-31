@@ -1,0 +1,4 @@
+name: StormtrooperX
+version: '1.0'
+main: com.goobercraft.stormtrooperx.StormtrooperX
+api-version: '1.21'
