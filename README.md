@@ -10,6 +10,8 @@ A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs lik
 - Per-entity configuration (enable/disable specific mobs)
 - Adjustable accuracy modifier (0.0 = perfect aim, 1.0 = complete chaos)
 - In-game reload command
+- Automatic update checker (checks GitHub releases on startup)
+- Anonymous usage statistics via [bStats](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 - Debug mode for troubleshooting
 - Lightweight with minimal performance impact
 
@@ -41,6 +43,9 @@ skeleton: true
 stray: true
 bogged: true
 
+# Check for updates on plugin startup
+check-for-updates: true
+
 # Enable debug logging
 debug: false
 ```
@@ -51,6 +56,7 @@ debug: false
 - **skeleton**: Enable nerfs for Skeletons. Default: true
 - **stray**: Enable nerfs for Strays. Default: true
 - **bogged**: Enable nerfs for Bogged. Default: true
+- **check-for-updates**: Automatically check for updates on startup from GitHub releases. Default: true
 - **debug**: Enable detailed logging for troubleshooting. Default: false
 
 ## Commands
@@ -113,6 +119,21 @@ This repository includes GitHub Actions workflows:
 If you encounter any issues or have suggestions:
 1. Check the [Issues](../../issues) page to see if it's already reported
 2. Open a new issue with details about your setup and the problem
+
+## Metrics
+
+This plugin uses [bStats](https://bstats.org/) to collect anonymous usage statistics. This helps understand how the plugin is being used and guides future development.
+
+**Data collected includes:**
+- Server software and version
+- Plugin version
+- Java version
+- Server location (country)
+- Player count
+
+You can view the statistics at: https://bstats.org/plugin/bukkit/StormtrooperX/27782
+
+To opt-out of metrics collection, set `enabled: false` in `plugins/bStats/config.yml`.
 
 ## License
 

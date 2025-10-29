@@ -30,13 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Automatic update checker that queries GitHub Releases API on startup
+- `check-for-updates` configuration option to enable/disable update checking
+- Console notifications when new versions are available
+- bStats metrics integration for anonymous usage statistics (plugin ID: 27782)
+- Shaded bStats dependency to avoid conflicts with other plugins
+
+## [Unreleased - Future]
+
 ### Planned
 - Support for additional ranged mobs (e.g., Pillagers, Piglins, Drowned)
 - Per-mob accuracy settings
 - Configurable accuracy ranges per entity type
 - Optional metrics/statistics tracking
-- Update checker
 
 ---
 
-[1.0.0]: https://github.com/yourusername/StormtrooperX/releases/tag/v1.0.0
+[1.0.0]: https://github.com/mdw19873/stormtrooperx/releases/tag/v1.0.0

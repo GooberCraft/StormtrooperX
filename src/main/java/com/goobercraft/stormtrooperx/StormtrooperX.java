@@ -3,6 +3,7 @@ package com.goobercraft.stormtrooperx;
 import java.util.logging.Logger;
 import java.util.Set;
 
+import org.bstats.bukkit.Metrics;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -49,6 +50,15 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         this.logger.info("  Successfully enabled!");
         this.logger.info("  Nerfing mob accuracy...");
         this.logger.info("========================================");
+
+        // Initialize bStats metrics
+        int pluginId = 27782;
+        new Metrics(this, pluginId);
+
+        // Check for updates
+        if (getConfig().getBoolean("check-for-updates", true)) {
+            checkForUpdates();
+        }
     }
 
     @Override
@@ -57,6 +67,24 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         this.logger.info("  StormtrooperX v" + getDescription().getVersion());
         this.logger.info("  Successfully disabled!");
         this.logger.info("========================================");
+    }
+
+    private void checkForUpdates() {
+        UpdateChecker updateChecker = new UpdateChecker(this, "mdw19873/stormtrooperx");
+        updateChecker.checkForUpdates((comparison, currentVersion, latestVersion) -> {
+            if (comparison < 0) {
+                this.logger.info("========================================");
+                this.logger.warning("  A new update is available!");
+                this.logger.warning("  Current version: " + currentVersion);
+                this.logger.warning("  Latest version: " + latestVersion);
+                this.logger.warning("  Download: https://github.com/mdw19873/stormtrooperx/releases");
+                this.logger.info("========================================");
+            } else if (comparison == 0) {
+                this.logger.info("You are running the latest version!");
+            } else {
+                this.logger.info("You are running a development version (" + currentVersion + ")");
+            }
+        });
     }
 
     private void loadConfiguration() {
