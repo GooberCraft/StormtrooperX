@@ -25,8 +25,24 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
+    - name: Run tests
+      run: mvn clean test
+
+    - name: Publish test results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        junit_files: target/surefire-reports/TEST-*.xml
+
+    - name: Upload coverage reports
+      if: matrix.java-version == 8
+      uses: codecov/codecov-action@v4
+      with:
+        files: target/site/jacoco/jacoco.xml
+        fail_ci_if_error: false
+
     - name: Build with Maven
-      run: mvn clean package
+      run: mvn package -DskipTests
 
     - name: Get version from pom.xml
       id: get_version
