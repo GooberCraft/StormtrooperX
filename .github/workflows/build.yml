@@ -57,13 +57,14 @@ jobs:
       with:
         files: target/surefire-reports/TEST-*.xml
 
-    # Only upload coverage from Java 8, and make it required on master branch
+    # Only upload coverage from Java 8, optional until token is configured
     - name: Upload coverage reports
       if: matrix.java-version == 8 && github.event_name == 'push'
       uses: codecov/codecov-action@v4
       with:
         files: target/site/jacoco/jacoco.xml
-        fail_ci_if_error: ${{ github.ref == 'refs/heads/master' }}
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}  # Optional: set this secret if using Codecov
 
     # Only need version and artifact from Java 8 build
     - name: Get version from pom.xml
