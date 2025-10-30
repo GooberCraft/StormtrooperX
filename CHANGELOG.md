@@ -31,11 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Automatic update checker that queries GitHub Releases API on startup
-- `check-for-updates` configuration option to enable/disable update checking
-- Console notifications when new versions are available
-- bStats metrics integration for anonymous usage statistics (plugin ID: 27782)
-- Shaded bStats dependency to avoid conflicts with other plugins
+- Player opt-out system allowing individual players to disable mob accuracy nerfs
+- H2 database integration for persistent storage of player preferences
+- `/stormtrooperx optout` command for players to toggle their opt-out status
+- `stormtrooperx.optout` permission (default: true)
+- DatabaseManager class for H2 operations
+- Shaded H2 dependency to avoid conflicts with other plugins
+- Target player checking in bow shoot event handler
+
+### Changed
+- Event handler now checks if target player has opted out before applying nerfs
+- Command usage updated to include optout option
 
 ## [Unreleased - Future]
 

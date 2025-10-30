@@ -6,7 +6,7 @@
 
     <groupId>com.goobercraft</groupId>
     <artifactId>StormtrooperX</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
     <packaging>jar</packaging>
 
     <name>StormtrooperX</name>
@@ -43,6 +43,10 @@
                                 <relocation>
                                     <pattern>org.bstats</pattern>
                                     <shadedPattern>com.goobercraft.stormtrooperx.bstats</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.h2</pattern>
+                                    <shadedPattern>com.goobercraft.stormtrooperx.h2</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>
@@ -90,6 +94,12 @@
             <groupId>org.bstats</groupId>
             <artifactId>bstats-bukkit</artifactId>
             <version>3.1.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.1.214</version>
             <scope>compile</scope>
         </dependency>
     </dependencies>

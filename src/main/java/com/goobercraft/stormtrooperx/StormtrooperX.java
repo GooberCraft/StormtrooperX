@@ -8,6 +8,9 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Mob;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityShootBowEvent;
@@ -37,11 +40,16 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     private final Set<EntityType> entities = new java.util.HashSet<>();
     private double accuracy = 0.7;
     private boolean debug = false;
+    private DatabaseManager databaseManager;
 
     @Override
     public void onEnable() {
         this.saveDefaultConfig();
         this.getServer().getPluginManager().registerEvents(this, this);
+
+        // Initialize database
+        databaseManager = new DatabaseManager(logger, getDataFolder());
+        databaseManager.initialize();
 
         loadConfiguration();
 
@@ -52,7 +60,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         this.logger.info("========================================");
 
         // Initialize bStats metrics
-        int pluginId = 27782;
+        final int pluginId = 27782;
         new Metrics(this, pluginId);
 
         // Check for updates
@@ -63,6 +71,11 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        // Close database connection
+        if (databaseManager != null) {
+            databaseManager.close();
+        }
+
         this.logger.info("========================================");
         this.logger.info("  StormtrooperX v" + getDescription().getVersion());
         this.logger.info("  Successfully disabled!");
@@ -152,6 +165,30 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                 sender.sendMessage(ChatColor.GREEN + "Configuration reloaded successfully!");
                 return true;
             }
+
+            if (args[0].equalsIgnoreCase("optout") || args[0].equalsIgnoreCase("toggle")) {
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage(ChatColor.RED + "Only players can use this command!");
+                    return true;
+                }
+
+                if (!sender.hasPermission("stormtrooperx.optout")) {
+                    sender.sendMessage(ChatColor.RED + "You don't have permission to opt-out!");
+                    return true;
+                }
+
+                Player player = (Player) sender;
+                boolean newStatus = databaseManager.toggleOptOut(player.getUniqueId());
+
+                if (newStatus) {
+                    sender.sendMessage(ChatColor.GREEN + "You have opted out of mob accuracy nerfs!");
+                    sender.sendMessage(ChatColor.YELLOW + "Mobs will shoot at you with normal accuracy.");
+                } else {
+                    sender.sendMessage(ChatColor.GREEN + "You have opted back in to mob accuracy nerfs!");
+                    sender.sendMessage(ChatColor.YELLOW + "Mobs will now have reduced accuracy when shooting at you.");
+                }
+                return true;
+            }
         }
 
         return false;
@@ -170,6 +207,22 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         // Only process entities that are in our configured set
         if (!entities.contains(event.getEntity().getType())) {
             return;
+        }
+
+        // Check if the target player has opted out
+        if (event.getEntity() instanceof Mob) {
+            Mob mob = (Mob) event.getEntity();
+            LivingEntity target = mob.getTarget();
+
+            if (target instanceof Player) {
+                Player player = (Player) target;
+                if (databaseManager.isOptedOut(player.getUniqueId())) {
+                    if (debug) {
+                        logger.info("Skipping nerf for " + player.getName() + " (opted out)");
+                    }
+                    return;
+                }
+            }
         }
 
         final Vector vec = event.getProjectile().getVelocity().clone();

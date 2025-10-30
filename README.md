@@ -9,9 +9,11 @@ A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs lik
 - Reduces accuracy of configurable ranged mobs
 - Per-entity configuration (enable/disable specific mobs)
 - Adjustable accuracy modifier (0.0 = perfect aim, 1.0 = complete chaos)
+- **Player opt-out system** - individual players can choose normal mob accuracy
 - In-game reload command
 - Automatic update checker (checks GitHub releases on startup)
 - Anonymous usage statistics via [bStats](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
+- Persistent storage using H2 database
 - Debug mode for troubleshooting
 - Lightweight with minimal performance impact
 
@@ -65,6 +67,7 @@ debug: false
 |---------|---------|-------------|------------|
 | `/stormtrooperx` | `/stx`, `/stormtrooper` | Show plugin info | `stormtrooperx.use` |
 | `/stormtrooperx reload` | - | Reload configuration | `stormtrooperx.reload` |
+| `/stormtrooperx optout` | `/stx toggle` | Toggle mob accuracy nerfs for yourself | `stormtrooperx.optout` |
 
 ## Permissions
 
@@ -72,6 +75,7 @@ debug: false
 |------------|-------------|---------|
 | `stormtrooperx.use` | Access to main command | op |
 | `stormtrooperx.reload` | Reload plugin configuration | op |
+| `stormtrooperx.optout` | Opt-out of mob accuracy nerfs | true |
 
 ## Building from Source
 

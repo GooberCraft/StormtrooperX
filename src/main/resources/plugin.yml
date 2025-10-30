@@ -9,7 +9,7 @@ website: https://github.com/yourusername/StormtrooperX
 commands:
   stormtrooperx:
     description: Main command for StormtrooperX
-    usage: /stormtrooperx <reload>
+    usage: /stormtrooperx <reload|optout>
     aliases: [stx, stormtrooper]
     permission: stormtrooperx.use
 
@@ -20,3 +20,6 @@ permissions:
   stormtrooperx.reload:
     description: Allows reloading the plugin configuration
     default: op
+  stormtrooperx.optout:
+    description: Allows players to opt-out of mob accuracy nerfs
+    default: true
