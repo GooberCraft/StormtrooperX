@@ -26,20 +26,17 @@ class UpdateCheckerTest {
     @Mock
     private Plugin plugin;
 
-    @Mock
-    private PluginDescriptionFile pluginDescription;
-
-    @Mock
-    private Logger logger;
-
     private UpdateChecker updateChecker;
 
     @BeforeEach
     void setUp() {
+        // Create real instances where possible to avoid mocking final classes
+        Logger logger = Logger.getLogger("TestLogger");
+        PluginDescriptionFile description = new PluginDescriptionFile("TestPlugin", "1.0.0", "com.test.Main");
+
         // Use lenient stubbing since not all tests will call these methods
         lenient().when(plugin.getLogger()).thenReturn(logger);
-        lenient().when(plugin.getDescription()).thenReturn(pluginDescription);
-        lenient().when(pluginDescription.getVersion()).thenReturn("1.0.0");
+        lenient().when(plugin.getDescription()).thenReturn(description);
         updateChecker = new UpdateChecker(plugin, "owner/repo");
     }
 
