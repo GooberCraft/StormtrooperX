@@ -1,5 +1,11 @@
 # StormtrooperX
 
+[![Build Status](https://github.com/mdw19873/StormtrooperX/workflows/Build/badge.svg)](https://github.com/mdw19873/StormtrooperX/actions)
+[![License](https://img.shields.io/github/license/mdw19873/StormtrooperX)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/mdw19873/StormtrooperX)](https://github.com/mdw19873/StormtrooperX/releases)
+[![bStats Servers](https://img.shields.io/bstats/servers/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
+[![bStats Players](https://img.shields.io/bstats/players/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
+
 A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs like Skeletons, Strays, and Bogged - because they aim like stormtroopers!
 
 > **Note:** This is a refactored and enhanced version of [Stormtrooper](https://github.com/byteful/Stormtrooper) by byteful, with added features including multi-mob support, version compatibility, and improved velocity handling.
@@ -88,7 +94,7 @@ debug: false
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/StormtrooperX.git
+   git clone https://github.com/mdw19873/StormtrooperX.git
    cd StormtrooperX
    ```
 
@@ -103,14 +109,14 @@ debug: false
 
 This repository includes GitHub Actions workflows:
 
-- **Build Workflow** (`.github/workflows/build.yml`): Automatically builds the plugin on every push to master/develop and pull requests. Tests against Java 8, 17, and 21 to ensure compatibility. Artifacts are available in the Actions tab.
+- **Build Workflow** (`.github/workflows/build.yml`): Automatically builds the plugin on every push to master/develop and pull requests. Tests against Java 8, 11, 17, and 21 to ensure compatibility. Includes automated testing with JUnit and code coverage reporting. Artifacts are available in the Actions tab.
 - **Release Workflow** (`.github/workflows/release.yml`): Automatically builds and attaches the JAR file to GitHub releases when you create a new release.
 
 ## Compatibility
 
 - **Minecraft Version**: 1.13 - 1.21.x (and future versions)
 - **Server Software**: Spigot, Paper, Purpur, or any Spigot-based server
-- **Java Version**: 8+ (tested on Java 8, 17, and 21)
+- **Java Version**: 8+ (tested on Java 8, 11, 17, and 21)
 
 **Version Notes**:
 - Minecraft 1.13-1.16.5: Java 8+
@@ -145,10 +151,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-Contributions are welcome! Feel free to:
-- Report bugs
-- Suggest new features
-- Submit pull requests
+Contributions are welcome! Please check the [Code of Conduct](CODE_OF_CONDUCT.md) and review existing [Issues](https://github.com/mdw19873/StormtrooperX/issues) and [Pull Requests](https://github.com/mdw19873/StormtrooperX/pulls) before contributing.
+
+Ways to contribute:
+- 🐛 [Report bugs](https://github.com/mdw19873/StormtrooperX/issues/new?template=bug_report.yml)
+- 💡 [Suggest features](https://github.com/mdw19873/StormtrooperX/issues/new?template=feature_request.yml)
+- 📖 Improve documentation
+- 🧪 Write tests
+- 💻 Submit pull requests
 
 ## Credits
 
