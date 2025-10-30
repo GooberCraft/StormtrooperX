@@ -22,25 +22,20 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
+    # Build with tests in one command
     - name: Build with Maven
       run: mvn clean package
 
-    - name: Get version from pom.xml
+    # Extract version from git tag instead of running Maven
+    - name: Get version from tag
       id: get_version
-      run: echo "VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_OUTPUT
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-    - name: Find JAR file
-      id: find_jar
-      run: |
-        JAR_FILE=$(find target -name "StormtrooperX-*.jar" -type f | head -n 1)
-        echo "JAR_PATH=$JAR_FILE" >> $GITHUB_OUTPUT
-
+    # Use modern action instead of deprecated upload-release-asset
     - name: Upload release asset
-      uses: actions/upload-release-asset@v1
+      uses: softprops/action-gh-release@v2
+      with:
+        files: target/StormtrooperX-*.jar
+        fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ steps.find_jar.outputs.JAR_PATH }}
-        asset_name: StormtrooperX-${{ steps.get_version.outputs.VERSION }}.jar
-        asset_content_type: application/java-archive
