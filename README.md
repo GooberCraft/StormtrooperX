@@ -130,7 +130,7 @@ The plugin automatically migrates old config formats to the new per-entity forma
 
 ### Prerequisites
 
-- Java 8 or higher
+- Java 11 or higher
 - Maven 3.6 or higher
 
 ### Build Steps
@@ -152,17 +152,17 @@ The plugin automatically migrates old config formats to the new per-entity forma
 
 This repository includes GitHub Actions workflows:
 
-- **Build Workflow** (`.github/workflows/build.yml`): Automatically builds the plugin on every push to master/develop and pull requests. Tests against Java 8, 11, 17, and 21 to ensure compatibility. Includes automated testing with JUnit and code coverage reporting. Artifacts are available in the Actions tab.
+- **Build Workflow** (`.github/workflows/build.yml`): Automatically builds the plugin on every push to master/develop and pull requests. Tests against Java 11, 17, and 21 to ensure compatibility. Includes automated testing with JUnit and code coverage reporting. Artifacts are available in the Actions tab.
 - **Release Workflow** (`.github/workflows/release.yml`): Automatically builds and attaches the JAR file to GitHub releases when you create a new release.
 
 ## Compatibility
 
 - **Minecraft Version**: 1.13 - 1.21.x (and future versions)
 - **Server Software**: Spigot, Paper, Purpur, or any Spigot-based server
-- **Java Version**: 8+ (tested on Java 8, 11, 17, and 21)
+- **Java Version**: 11+ (tested on Java 11, 17, and 21)
 
 **Version Notes**:
-- Minecraft 1.13-1.16.5: Java 8+
+- Minecraft 1.13-1.16.5: Java 11+
 - Minecraft 1.17-1.17.1: Java 16+
 - Minecraft 1.18+: Java 17+
 - The Bogged mob type is only available in Minecraft 1.21+. On earlier versions, the plugin will work normally but Bogged will be unavailable.

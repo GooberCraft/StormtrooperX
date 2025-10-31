@@ -1,7 +1,6 @@
 package com.goobercraft.stormtrooperx;
 
 import java.util.logging.Logger;
-import java.util.Set;
 
 import org.bstats.bukkit.Metrics;
 import org.bukkit.ChatColor;
@@ -208,8 +207,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
 
         if (enabled) {
             entityConfigs.put(entityType, new EntityConfig(true, accuracy));
-            this.logger.info(String.format("Entity '%s' will be nerfed! (accuracy: %.2f)",
-                capitalize(configKey), accuracy));
+            this.logger.info(String.format("Entity '%s' will be nerfed! (accuracy: %.2f)", capitalize(configKey), accuracy));
         }
     }
 
@@ -237,11 +235,9 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
             EntityType entityType = EntityType.valueOf(entityTypeName);
             double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
             entityConfigs.put(entityType, new EntityConfig(true, accuracy));
-            this.logger.info(String.format("Entity '%s' will be nerfed! (accuracy: %.2f)",
-                capitalize(configKey), accuracy));
+            this.logger.info(String.format("Entity '%s' will be nerfed! (accuracy: %.2f)", capitalize(configKey), accuracy));
         } catch (IllegalArgumentException e) {
-            this.logger.info(String.format("Entity '%s' is not available in this Minecraft version (%s required)",
-                capitalize(configKey), minVersion));
+            this.logger.info(String.format("Entity '%s' is not available in this Minecraft version (%s required)", capitalize(configKey), minVersion));
         }
     }
 
@@ -267,8 +263,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     private void displayEntityStatus(CommandSender sender, EntityType entityType, String configKey, String displayName, String versionNote) {
         EntityConfig config = entityConfigs.get(entityType);
         if (config != null && config.isEnabled()) {
-            sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " +
-                ChatColor.GREEN + "Enabled " + ChatColor.GRAY + "(accuracy: " + String.format("%.2f", config.getAccuracy()) + ")");
+            sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " + ChatColor.GREEN + "Enabled " + ChatColor.GRAY + "(accuracy: " + String.format("%.2f", config.getAccuracy()) + ")");
         } else {
             sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " + ChatColor.RED + "Disabled");
         }

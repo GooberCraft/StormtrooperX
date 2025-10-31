@@ -40,7 +40,7 @@ Have a question? Use the [question template](https://github.com/GooberCraft/Stor
 
 ### Prerequisites
 
-- **Java**: JDK 8 or higher (we test on Java 8, 11, 17, and 21)
+- **Java**: JDK 11 or higher (we test on Java 11, 17, and 21)
 - **Maven**: 3.6 or higher
 - **Git**: For version control
 - **IDE**: IntelliJ IDEA or Eclipse recommended
@@ -199,7 +199,7 @@ Fixes #38
 ### PR Review Process
 
 - Maintainers will review your PR
-- CI/CD checks must pass (build on Java 8, 11, 17, 21)
+- CI/CD checks must pass (build on Java 11, 17, 21)
 - Address any feedback or requested changes
 - Once approved, a maintainer will merge your PR
 
@@ -234,7 +234,7 @@ StormtrooperX/
 ## Compatibility Requirements
 
 ### Java Version
-- **Minimum**: Java 8
+- **Minimum**: Java 11
 - **Recommended**: Java 17+
 - Test on multiple versions when possible
 
@@ -302,7 +302,7 @@ if (getConfig().getBoolean("pillager", true)) {
 
 ### Adding New Dependencies
 - Keep dependencies minimal
-- Ensure compatibility with Java 8
+- Ensure compatibility with Java 11
 - Use Maven shade plugin for any non-Bukkit dependencies
 - Relocate packages to avoid conflicts
 
