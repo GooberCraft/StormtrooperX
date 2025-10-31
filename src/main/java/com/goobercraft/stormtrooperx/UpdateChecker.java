@@ -165,7 +165,18 @@ public class UpdateChecker {
                 break;
             }
         }
-        return numeric.length() > 0 ? Integer.parseInt(numeric.toString()) : 0;
+
+        if (numeric.length() == 0) {
+            return 0;
+        }
+
+        try {
+            return Integer.parseInt(numeric.toString());
+        } catch (NumberFormatException e) {
+            // Handle overflow or invalid number (shouldn't happen with digits only, but be safe)
+            plugin.getLogger().warning("Failed to parse version part: " + part);
+            return 0;
+        }
     }
 
     /**
