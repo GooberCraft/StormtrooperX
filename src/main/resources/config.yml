@@ -1,11 +1,15 @@
 
-# How accurate should bow aim be? The lower the number, the more accurate. Must be >= 0 and <= 1.
+# How accurate should bow/crossbow aim be? The lower the number, the more accurate. Must be >= 0 and <= 1.
 accuracy: 0.7
 
-# Nerf Entities (Only 3 entities are supported: bogged, skeleton, and stray)
-bogged: true
+# Nerf Entities - Bow Users (1.13+)
 skeleton: true
 stray: true
+bogged: true  # 1.21+ only
+
+# Nerf Entities - Crossbow Users
+pillager: true  # 1.14+ only
+piglin: true    # 1.16+ only
 
 # Check for updates on plugin startup
 check-for-updates: true

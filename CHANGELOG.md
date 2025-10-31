@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-10-30
+
+### Added
+- Support for crossbow-wielding mobs (Pillager, Piglin)
+- Version-safe handling of Pillager (1.14+) and Piglin (1.16+)
+- Configuration options for `pillager` and `piglin`
+- Organized entity display in `/stormtrooperx` command by weapon type
+
+### Changed
+- Config file now categorizes entities by weapon type (Bow Users vs Crossbow Users)
+- Plugin description updated to mention all supported mobs
+- Command output groups entities by weapon type for better clarity
+- Updated documentation with new supported mobs
+
 ## [1.2.2] - 2025-10-30
 
 ### Fixed
@@ -82,12 +96,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Support for additional ranged mobs (e.g., Pillagers, Piglins, Drowned)
+- Support for projectile-throwing mobs (Drowned with tridents, Witches, etc.)
 - Per-mob accuracy settings
 - Configurable accuracy ranges per entity type
 
 ---
 
+[1.3.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.3.0
 [1.2.2]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.2.2
 [1.2.1]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.2.1
 [1.2.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.2.0

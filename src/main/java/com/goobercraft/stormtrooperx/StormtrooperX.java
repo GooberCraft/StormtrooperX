@@ -25,11 +25,12 @@ import org.jetbrains.annotations.NotNull;
  * by byteful (https://github.com/byteful/Stormtrooper).
  *
  * Enhancements include:
- * - Support for multiple mob types (Skeleton, Stray, Bogged)
+ * - Support for multiple mob types (Skeleton, Stray, Bogged, Pillager, Piglin)
  * - Version compatibility (1.13+)
- * - Arrow speed preservation (only direction is modified)
+ * - Arrow and crossbow bolt speed preservation (only direction is modified)
  * - Reload command and improved UX
  * - Per-entity configuration
+ * - Player opt-out system
  *
  * @author GooberCraft
  * @author byteful (original implementation)
@@ -106,6 +107,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         accuracy = getConfig().getDouble("accuracy", 0.7);
         debug = getConfig().getBoolean("debug", false);
 
+        // Bow users
         if (getConfig().getBoolean("skeleton", true)) {
             this.logger.info("Entity 'Skeleton' will be nerfed!");
             entities.add(EntityType.SKELETON);
@@ -126,6 +128,29 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                 this.logger.info("Entity 'Bogged' is not available in this Minecraft version (1.21+ required)");
             }
         }
+
+        // Crossbow users
+        // PILLAGER only exists in 1.14+
+        if (getConfig().getBoolean("pillager", true)) {
+            try {
+                EntityType pillagerType = EntityType.valueOf("PILLAGER");
+                this.logger.info("Entity 'Pillager' will be nerfed!");
+                entities.add(pillagerType);
+            } catch (IllegalArgumentException e) {
+                this.logger.info("Entity 'Pillager' is not available in this Minecraft version (1.14+ required)");
+            }
+        }
+
+        // PIGLIN only exists in 1.16+
+        if (getConfig().getBoolean("piglin", true)) {
+            try {
+                EntityType piglinType = EntityType.valueOf("PIGLIN");
+                this.logger.info("Entity 'Piglin' will be nerfed!");
+                entities.add(piglinType);
+            } catch (IllegalArgumentException e) {
+                this.logger.info("Entity 'Piglin' is not available in this Minecraft version (1.16+ required)");
+            }
+        }
     }
 
     @Override
@@ -138,7 +163,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                 sender.sendMessage(ChatColor.YELLOW + "Accuracy: " + ChatColor.WHITE + String.format("%.2f", accuracy));
                 sender.sendMessage(ChatColor.YELLOW + "Debug Mode: " + ChatColor.WHITE + (debug ? "Enabled" : "Disabled"));
                 sender.sendMessage("");
-                sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities:");
+                sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Bow Users):");
                 sender.sendMessage(ChatColor.WHITE + "  - Skeleton: " + (getConfig().getBoolean("skeleton", true) ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled"));
                 sender.sendMessage(ChatColor.WHITE + "  - Stray: " + (getConfig().getBoolean("stray", true) ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled"));
 
@@ -149,6 +174,26 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                 } catch (IllegalArgumentException e) {
                     sender.sendMessage(ChatColor.WHITE + "  - Bogged: " + ChatColor.GRAY + "Not available (1.21+ only)");
                 }
+
+                sender.sendMessage("");
+                sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Crossbow Users):");
+
+                // Check if PILLAGER exists in this version
+                try {
+                    EntityType.valueOf("PILLAGER");
+                    sender.sendMessage(ChatColor.WHITE + "  - Pillager: " + (getConfig().getBoolean("pillager", true) ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled"));
+                } catch (IllegalArgumentException e) {
+                    sender.sendMessage(ChatColor.WHITE + "  - Pillager: " + ChatColor.GRAY + "Not available (1.14+ only)");
+                }
+
+                // Check if PIGLIN exists in this version
+                try {
+                    EntityType.valueOf("PIGLIN");
+                    sender.sendMessage(ChatColor.WHITE + "  - Piglin: " + (getConfig().getBoolean("piglin", true) ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled"));
+                } catch (IllegalArgumentException e) {
+                    sender.sendMessage(ChatColor.WHITE + "  - Piglin: " + ChatColor.GRAY + "Not available (1.16+ only)");
+                }
+
                 sender.sendMessage("");
                 sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.YELLOW + "/stormtrooperx reload" + ChatColor.GRAY + " to reload the configuration.");
                 return true;

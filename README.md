@@ -6,7 +6,7 @@
 [![bStats Servers](https://img.shields.io/bstats/servers/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 [![bStats Players](https://img.shields.io/bstats/players/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 
-A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs like Skeletons, Strays, and Bogged - because they aim like stormtroopers!
+A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs like Skeletons, Strays, Bogged, Pillagers, and Piglins - because they aim like stormtroopers!
 
 > **Note:** This is a refactored and enhanced version of [Stormtrooper](https://github.com/byteful/Stormtrooper) by byteful, with added features including multi-mob support, version compatibility, and improved velocity handling.
 
@@ -25,9 +25,14 @@ A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs lik
 
 ## Supported Mobs
 
+### Bow Users
 - Skeleton (1.13+)
 - Stray (1.13+)
 - Bogged (1.21+ only)
+
+### Crossbow Users
+- Pillager (1.14+ only)
+- Piglin (1.16+ only)
 
 ## Installation
 
@@ -41,29 +46,33 @@ A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs lik
 The plugin generates a `config.yml` file in `plugins/StormtrooperX/`:
 
 ```yaml
-# Accuracy modifier (0.0 - 1.0)
-# Lower values = more accurate shots
-# Higher values = less accurate shots
+# How accurate should bow/crossbow aim be? The lower the number, the more accurate. Must be >= 0 and <= 1.
 accuracy: 0.7
 
-# Enable/disable specific mob types
+# Nerf Entities - Bow Users (1.13+)
 skeleton: true
 stray: true
-bogged: true
+bogged: true  # 1.21+ only
+
+# Nerf Entities - Crossbow Users
+pillager: true  # 1.14+ only
+piglin: true    # 1.16+ only
 
 # Check for updates on plugin startup
 check-for-updates: true
 
-# Enable debug logging
+# Debug Mode
 debug: false
 ```
 
 ### Configuration Options
 
-- **accuracy** (0.0 - 1.0): Controls how much random deviation is added to mob arrows. Default: 0.7
+- **accuracy** (0.0 - 1.0): Controls how much random deviation is added to mob projectiles. Default: 0.7
 - **skeleton**: Enable nerfs for Skeletons. Default: true
 - **stray**: Enable nerfs for Strays. Default: true
-- **bogged**: Enable nerfs for Bogged. Default: true
+- **bogged**: Enable nerfs for Bogged (1.21+ only). Default: true
+- **pillager**: Enable nerfs for Pillagers (1.14+ only). Default: true
+- **piglin**: Enable nerfs for Piglins (1.16+ only). Default: true
 - **check-for-updates**: Automatically check for updates on startup from GitHub releases. Default: true
 - **debug**: Enable detailed logging for troubleshooting. Default: false
 

@@ -3,7 +3,7 @@ version: '${project.version}'
 main: com.goobercraft.stormtrooperx.StormtrooperX
 api-version: '1.13'
 author: GooberCraft
-description: A plugin that nerfs the accuracy of ranged mobs like Skeletons, Strays, and Bogged
+description: A plugin that nerfs the accuracy of ranged mobs like Skeletons, Strays, Bogged, Pillagers, and Piglins
 website: https://github.com/GooberCraft/StormtrooperX
 
 commands:
