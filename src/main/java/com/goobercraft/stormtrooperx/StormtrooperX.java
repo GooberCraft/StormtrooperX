@@ -38,10 +38,30 @@ import org.jetbrains.annotations.NotNull;
 public final class StormtrooperX extends JavaPlugin implements Listener {
     private final Logger logger = this.getLogger();
 
-    private final Set<EntityType> entities = new java.util.HashSet<>();
-    private double accuracy = 0.7;
+    private final java.util.Map<EntityType, EntityConfig> entityConfigs = new java.util.HashMap<>();
     private boolean debug = false;
     private DatabaseManager databaseManager;
+
+    /**
+     * Configuration for a specific entity type.
+     */
+    private static class EntityConfig {
+        private final boolean enabled;
+        private final double accuracy;
+
+        EntityConfig(boolean enabled, double accuracy) {
+            this.enabled = enabled;
+            this.accuracy = accuracy;
+        }
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public double getAccuracy() {
+            return accuracy;
+        }
+    }
 
     @Override
     public void onEnable() {
@@ -102,54 +122,174 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     }
 
     private void loadConfiguration() {
-        entities.clear();
+        entityConfigs.clear();
 
-        accuracy = getConfig().getDouble("accuracy", 0.7);
+        // Check config version and migrate if needed
+        int configVersion = getConfig().getInt("config-version", 1);
+        if (configVersion < 2) {
+            this.logger.info("Detected old config format (v1). Migrating to v2...");
+            migrateConfigToV2();
+            reloadConfig(); // Reload after migration
+        }
+
         debug = getConfig().getBoolean("debug", false);
 
-        // Bow users
-        if (getConfig().getBoolean("skeleton", true)) {
-            this.logger.info("Entity 'Skeleton' will be nerfed!");
-            entities.add(EntityType.SKELETON);
+        // Load per-entity configurations
+        loadEntityConfig("skeleton", EntityType.SKELETON, "1.13+");
+        loadEntityConfig("stray", EntityType.STRAY, "1.13+");
+        loadEntityConfig("bogged", "BOGGED", "1.21+");
+        loadEntityConfig("pillager", "PILLAGER", "1.14+");
+        loadEntityConfig("piglin", "PIGLIN", "1.16+");
+    }
+
+    /**
+     * Migrates configuration from v1 (global accuracy) to v2 (per-entity accuracy).
+     */
+    private void migrateConfigToV2() {
+        // Read old format values
+        double globalAccuracy = getConfig().getDouble("accuracy", 0.7);
+        boolean skeletonEnabled = getConfig().getBoolean("skeleton", true);
+        boolean strayEnabled = getConfig().getBoolean("stray", true);
+        boolean boggedEnabled = getConfig().getBoolean("bogged", true);
+        boolean pillagerEnabled = getConfig().getBoolean("pillager", true);
+        boolean piglinEnabled = getConfig().getBoolean("piglin", true);
+        boolean checkUpdates = getConfig().getBoolean("check-for-updates", true);
+        boolean debugMode = getConfig().getBoolean("debug", false);
+
+        // Clear old config
+        getConfig().set("accuracy", null);
+        getConfig().set("skeleton", null);
+        getConfig().set("stray", null);
+        getConfig().set("bogged", null);
+        getConfig().set("pillager", null);
+        getConfig().set("piglin", null);
+
+        // Set new format
+        getConfig().set("config-version", 2);
+
+        // Migrate entities with per-entity accuracy
+        getConfig().set("entities.skeleton.enabled", skeletonEnabled);
+        getConfig().set("entities.skeleton.accuracy", globalAccuracy);
+        getConfig().set("entities.stray.enabled", strayEnabled);
+        getConfig().set("entities.stray.accuracy", globalAccuracy);
+        getConfig().set("entities.bogged.enabled", boggedEnabled);
+        getConfig().set("entities.bogged.accuracy", globalAccuracy);
+        getConfig().set("entities.pillager.enabled", pillagerEnabled);
+        getConfig().set("entities.pillager.accuracy", globalAccuracy);
+        getConfig().set("entities.piglin.enabled", piglinEnabled);
+        getConfig().set("entities.piglin.accuracy", globalAccuracy);
+
+        // Preserve other settings
+        getConfig().set("check-for-updates", checkUpdates);
+        getConfig().set("debug", debugMode);
+
+        // Save migrated config
+        saveConfig();
+        this.logger.info("Config migration complete! All entities now use accuracy: " + globalAccuracy);
+        this.logger.info("You can now configure individual accuracy per entity in config.yml");
+    }
+
+    /**
+     * Loads configuration for a specific entity type.
+     *
+     * @param configKey The key in the config file
+     * @param entityType The EntityType enum value
+     * @param minVersion The minimum Minecraft version required
+     */
+    private void loadEntityConfig(String configKey, EntityType entityType, String minVersion) {
+        String path = "entities." + configKey;
+
+        if (!getConfig().contains(path)) {
+            return;
         }
 
-        if (getConfig().getBoolean("stray", true)) {
-            this.logger.info("Entity 'Stray' will be nerfed!");
-            entities.add(EntityType.STRAY);
+        boolean enabled = getConfig().getBoolean(path + ".enabled", true);
+        double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
+
+        if (enabled) {
+            entityConfigs.put(entityType, new EntityConfig(true, accuracy));
+            this.logger.info(String.format("Entity '%s' will be nerfed! (accuracy: %.2f)",
+                capitalize(configKey), accuracy));
+        }
+    }
+
+    /**
+     * Loads configuration for an entity type that may not exist in all versions.
+     *
+     * @param configKey The key in the config file
+     * @param entityTypeName The name of the EntityType enum value
+     * @param minVersion The minimum Minecraft version required
+     */
+    private void loadEntityConfig(String configKey, String entityTypeName, String minVersion) {
+        String path = "entities." + configKey;
+
+        if (!getConfig().contains(path)) {
+            return;
         }
 
-        // BOGGED only exists in 1.21+, handle gracefully for older versions
-        if (getConfig().getBoolean("bogged", true)) {
-            try {
-                EntityType boggedType = EntityType.valueOf("BOGGED");
-                this.logger.info("Entity 'Bogged' will be nerfed!");
-                entities.add(boggedType);
-            } catch (IllegalArgumentException e) {
-                this.logger.info("Entity 'Bogged' is not available in this Minecraft version (1.21+ required)");
-            }
+        boolean enabled = getConfig().getBoolean(path + ".enabled", true);
+
+        if (!enabled) {
+            return;
         }
 
-        // Crossbow users
-        // PILLAGER only exists in 1.14+
-        if (getConfig().getBoolean("pillager", true)) {
-            try {
-                EntityType pillagerType = EntityType.valueOf("PILLAGER");
-                this.logger.info("Entity 'Pillager' will be nerfed!");
-                entities.add(pillagerType);
-            } catch (IllegalArgumentException e) {
-                this.logger.info("Entity 'Pillager' is not available in this Minecraft version (1.14+ required)");
-            }
+        try {
+            EntityType entityType = EntityType.valueOf(entityTypeName);
+            double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
+            entityConfigs.put(entityType, new EntityConfig(true, accuracy));
+            this.logger.info(String.format("Entity '%s' will be nerfed! (accuracy: %.2f)",
+                capitalize(configKey), accuracy));
+        } catch (IllegalArgumentException e) {
+            this.logger.info(String.format("Entity '%s' is not available in this Minecraft version (%s required)",
+                capitalize(configKey), minVersion));
         }
+    }
 
-        // PIGLIN only exists in 1.16+
-        if (getConfig().getBoolean("piglin", true)) {
-            try {
-                EntityType piglinType = EntityType.valueOf("PIGLIN");
-                this.logger.info("Entity 'Piglin' will be nerfed!");
-                entities.add(piglinType);
-            } catch (IllegalArgumentException e) {
-                this.logger.info("Entity 'Piglin' is not available in this Minecraft version (1.16+ required)");
-            }
+    /**
+     * Capitalizes the first letter of a string.
+     */
+    private static String capitalize(String str) {
+        if (str == null || str.isEmpty()) {
+            return str;
+        }
+        return str.substring(0, 1).toUpperCase() + str.substring(1);
+    }
+
+    /**
+     * Displays the status of an entity in the command output.
+     *
+     * @param sender The command sender
+     * @param entityType The entity type
+     * @param configKey The config key
+     * @param displayName The display name
+     * @param versionNote Optional version note (e.g., "1.21+ only")
+     */
+    private void displayEntityStatus(CommandSender sender, EntityType entityType, String configKey, String displayName, String versionNote) {
+        EntityConfig config = entityConfigs.get(entityType);
+        if (config != null && config.isEnabled()) {
+            sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " +
+                ChatColor.GREEN + "Enabled " + ChatColor.GRAY + "(accuracy: " + String.format("%.2f", config.getAccuracy()) + ")");
+        } else {
+            sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " + ChatColor.RED + "Disabled");
+        }
+    }
+
+    /**
+     * Displays the status of a version-dependent entity in the command output.
+     *
+     * @param sender The command sender
+     * @param entityTypeName The entity type name
+     * @param configKey The config key
+     * @param displayName The display name
+     * @param versionNote Version requirement note
+     */
+    private void displayEntityStatus(CommandSender sender, String entityTypeName, String configKey, String displayName, String versionNote) {
+        try {
+            EntityType entityType = EntityType.valueOf(entityTypeName);
+            displayEntityStatus(sender, entityType, configKey, displayName, versionNote);
+        } catch (IllegalArgumentException e) {
+            sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " +
+                ChatColor.GRAY + "Not available (" + versionNote + ")");
         }
     }
 
@@ -160,39 +300,17 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                 sender.sendMessage(ChatColor.GOLD + "========================================");
                 sender.sendMessage(ChatColor.GOLD + "  StormtrooperX v" + getDescription().getVersion());
                 sender.sendMessage(ChatColor.GOLD + "========================================");
-                sender.sendMessage(ChatColor.YELLOW + "Accuracy: " + ChatColor.WHITE + String.format("%.2f", accuracy));
                 sender.sendMessage(ChatColor.YELLOW + "Debug Mode: " + ChatColor.WHITE + (debug ? "Enabled" : "Disabled"));
                 sender.sendMessage("");
                 sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Bow Users):");
-                sender.sendMessage(ChatColor.WHITE + "  - Skeleton: " + (getConfig().getBoolean("skeleton", true) ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled"));
-                sender.sendMessage(ChatColor.WHITE + "  - Stray: " + (getConfig().getBoolean("stray", true) ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled"));
-
-                // Check if BOGGED exists in this version
-                try {
-                    EntityType.valueOf("BOGGED");
-                    sender.sendMessage(ChatColor.WHITE + "  - Bogged: " + (getConfig().getBoolean("bogged", true) ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled"));
-                } catch (IllegalArgumentException e) {
-                    sender.sendMessage(ChatColor.WHITE + "  - Bogged: " + ChatColor.GRAY + "Not available (1.21+ only)");
-                }
+                displayEntityStatus(sender, EntityType.SKELETON, "skeleton", "Skeleton", null);
+                displayEntityStatus(sender, EntityType.STRAY, "stray", "Stray", null);
+                displayEntityStatus(sender, "BOGGED", "bogged", "Bogged", "1.21+ only");
 
                 sender.sendMessage("");
                 sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Crossbow Users):");
-
-                // Check if PILLAGER exists in this version
-                try {
-                    EntityType.valueOf("PILLAGER");
-                    sender.sendMessage(ChatColor.WHITE + "  - Pillager: " + (getConfig().getBoolean("pillager", true) ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled"));
-                } catch (IllegalArgumentException e) {
-                    sender.sendMessage(ChatColor.WHITE + "  - Pillager: " + ChatColor.GRAY + "Not available (1.14+ only)");
-                }
-
-                // Check if PIGLIN exists in this version
-                try {
-                    EntityType.valueOf("PIGLIN");
-                    sender.sendMessage(ChatColor.WHITE + "  - Piglin: " + (getConfig().getBoolean("piglin", true) ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled"));
-                } catch (IllegalArgumentException e) {
-                    sender.sendMessage(ChatColor.WHITE + "  - Piglin: " + ChatColor.GRAY + "Not available (1.16+ only)");
-                }
+                displayEntityStatus(sender, "PILLAGER", "pillager", "Pillager", "1.14+ only");
+                displayEntityStatus(sender, "PIGLIN", "piglin", "Piglin", "1.16+ only");
 
                 sender.sendMessage("");
                 sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.YELLOW + "/stormtrooperx reload" + ChatColor.GRAY + " to reload the configuration.");
@@ -249,8 +367,12 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
             logger.info("EntityShootBowEvent -- " + event.getEntity().getType() + ": " + event.getProjectile().getVelocity());
         }
 
-        // Only process entities that are in our configured set
-        if (!entities.contains(event.getEntity().getType())) {
+        // Get entity configuration
+        EntityType entityType = event.getEntity().getType();
+        EntityConfig config = entityConfigs.get(entityType);
+
+        // Only process entities that are configured and enabled
+        if (config == null || !config.isEnabled()) {
             return;
         }
 
@@ -273,15 +395,16 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         final Vector vec = event.getProjectile().getVelocity().clone();
         final double originalSpeed = vec.length();
 
-        // Add random deviation to the direction
-        vec.add(Vector.getRandom().multiply(clamp(accuracy, 0, 1)));
+        // Add random deviation to the direction using entity-specific accuracy
+        vec.add(Vector.getRandom().multiply(clamp(config.getAccuracy(), 0, 1)));
 
         // Preserve the original arrow speed
         vec.normalize().multiply(originalSpeed);
         event.getProjectile().setVelocity(vec);
 
         if (debug) {
-            logger.info("Projectile from '" + event.getEntity().getType() + "' launched with modified velocity '" + vec + "'");
+            logger.info("Projectile from '" + event.getEntity().getType() + "' launched with modified velocity '" + vec +
+                "' (accuracy: " + String.format("%.2f", config.getAccuracy()) + ")");
         }
     }
 

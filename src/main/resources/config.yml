@@ -1,15 +1,32 @@
 
-# How accurate should bow/crossbow aim be? The lower the number, the more accurate. Must be >= 0 and <= 1.
-accuracy: 0.7
+# StormtrooperX Configuration
+# Config version - DO NOT MODIFY (used for automatic migrations)
+config-version: 2
 
-# Nerf Entities - Bow Users (1.13+)
-skeleton: true
-stray: true
-bogged: true  # 1.21+ only
+# Per-Entity Configuration
+# Each entity can have individual accuracy settings
+# accuracy: 0.0 = perfect aim, 1.0+ = very inaccurate
+# Different projectile types may need different accuracy values for balance
 
-# Nerf Entities - Crossbow Users
-pillager: true  # 1.14+ only
-piglin: true    # 1.16+ only
+entities:
+  # Bow Users (1.13+)
+  skeleton:
+    enabled: true
+    accuracy: 0.7
+  stray:
+    enabled: true
+    accuracy: 0.7
+  bogged:  # 1.21+ only
+    enabled: true
+    accuracy: 0.7
+
+  # Crossbow Users
+  pillager:  # 1.14+ only
+    enabled: true
+    accuracy: 0.7
+  piglin:  # 1.16+ only
+    enabled: true
+    accuracy: 0.7
 
 # Check for updates on plugin startup
 check-for-updates: true
