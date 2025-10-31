@@ -60,7 +60,7 @@ jobs:
     # Only upload coverage from Java 8, optional until token is configured
     - name: Upload coverage reports
       if: matrix.java-version == 8 && github.event_name == 'push'
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       with:
         files: target/site/jacoco/jacoco.xml
         fail_ci_if_error: false
