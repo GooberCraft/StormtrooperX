@@ -4,12 +4,13 @@
 
 We actively provide security updates for the following versions:
 
-| Version | Supported          | Minecraft Version | Notes |
-| ------- | ------------------ | ----------------- | ----- |
-| 1.2.x   | :white_check_mark: | 1.13 - 1.21.x     | Current stable release |
-| 1.1.x   | :white_check_mark: | 1.13 - 1.21.x     | Security fixes only |
-| 1.0.x   | :x:                | 1.13 - 1.21.x     | No longer supported |
-| < 1.0   | :x:                | N/A               | No longer supported |
+| Version | Supported          | Minecraft Version | Java Version | Notes |
+| ------- | ------------------ | ----------------- | ------------ | ----- |
+| 1.5.x   | :white_check_mark: | 1.13 - 1.21.x     | 11+          | Current stable release |
+| 1.4.x   | :white_check_mark: | 1.13 - 1.21.x     | 8+           | Security fixes only |
+| 1.3.x   | :x:                | 1.13 - 1.21.x     | 8+           | No longer supported |
+| 1.2.x   | :x:                | 1.13 - 1.21.x     | 8+           | No longer supported |
+| < 1.2   | :x:                | N/A               | N/A          | No longer supported |
 
 **Note**: While the plugin is compatible with Minecraft 1.13+, we recommend using the latest stable Minecraft version and keeping the plugin updated.
 
@@ -135,7 +136,7 @@ When a security vulnerability is confirmed:
 
 ### Server Hardening
 - Keep your server software (Spigot/Paper) updated
-- Use the latest Java LTS version (Java 17 or 21 recommended)
+- Use the latest Java LTS version (Java 21 recommended, Java 11+ required)
 - Regularly update all plugins, including StormtrooperX
 - Review server logs for unusual activity
 - Use proper file permissions for the `plugins/` directory
