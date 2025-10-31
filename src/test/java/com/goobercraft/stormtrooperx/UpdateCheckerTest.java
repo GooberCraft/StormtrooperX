@@ -260,4 +260,18 @@ class UpdateCheckerTest {
         int result = (int) method.invoke(updateChecker, "1.0.0.0", "1.0.0.1");
         assertTrue(result < 0, "1.0.0.0 should be less than 1.0.0.1");
     }
+
+    @Test
+    void testParseVersionPart_overflow() throws Exception {
+        Method method = UpdateChecker.class.getDeclaredMethod("parseVersionPart", String.class);
+        method.setAccessible(true);
+
+        // Test with a number larger than Integer.MAX_VALUE (2147483647)
+        // This should trigger the NumberFormatException catch block
+        String overflowNumber = "999999999999999999999";
+        int result = (int) method.invoke(updateChecker, overflowNumber);
+
+        // Should return 0 when parsing fails due to overflow
+        assertEquals(0, result, "Should return 0 for numbers that overflow Integer");
+    }
 }
