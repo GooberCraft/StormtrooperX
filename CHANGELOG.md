@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-10-31
+
+### Added
+- Per-entity accuracy configuration system - each mob type can now have its own accuracy value
+- Config versioning system with `config-version` field for tracking config format
+- Automatic migration from v1 (global accuracy) to v2 (per-entity accuracy) config format
+- EntityConfig inner class for encapsulating entity-specific settings
+- 8 new unit tests for `capitalize()` method (5 tests) and `EntityConfig` class (3 tests)
+- Comprehensive test coverage for edge cases (null strings, empty strings, single character)
+
+### Changed
+- Config structure changed from flat format to nested `entities` section
+- Each entity now has individual `enabled` and `accuracy` settings
+- Command output (`/stormtrooperx`) now displays per-entity accuracy values
+- `capitalize()` method changed to static for better utility usage
+- Internal storage changed from `Set<EntityType>` to `Map<EntityType, EntityConfig>`
+- Config loading now uses entity-specific accuracy values instead of global setting
+
+### Migration Notes
+- **Breaking config format change** - automatically handled by migration system
+- Upgrading from v1.3.0 or earlier will trigger automatic migration
+- Old global `accuracy` value is applied to all entities during migration
+- Old entity enable/disable settings are preserved
+- Migration is logged to console for transparency
+- Original config settings are fully preserved, just reorganized
+
+### Technical
+- Added `migrateConfigToV2()` method for seamless config upgrades
+- Config version detection prevents repeated migrations
+- Per-entity accuracy allows future fine-tuning (e.g., crossbow mobs may need different values than bow mobs)
+
 ## [1.3.0] - 2025-10-30
 
 ### Added
@@ -96,12 +127,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Support for projectile-throwing mobs (Drowned with tridents, Witches, etc.)
-- Per-mob accuracy settings
-- Configurable accuracy ranges per entity type
+- Support for projectile-throwing mobs (Drowned with tridents, Witches, Ghasts, Blazes, etc.)
 
 ---
 
+[1.4.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.4.0
 [1.3.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.3.0
 [1.2.2]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.2.2
 [1.2.1]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.2.1

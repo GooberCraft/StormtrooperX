@@ -46,17 +46,32 @@ A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs lik
 The plugin generates a `config.yml` file in `plugins/StormtrooperX/`:
 
 ```yaml
-# How accurate should bow/crossbow aim be? The lower the number, the more accurate. Must be >= 0 and <= 1.
-accuracy: 0.7
+# StormtrooperX Configuration
+config-version: 2
 
-# Nerf Entities - Bow Users (1.13+)
-skeleton: true
-stray: true
-bogged: true  # 1.21+ only
+# Per-Entity Configuration
+# Each entity can have individual accuracy settings
+# accuracy: 0.0 = perfect aim, 1.0+ = very inaccurate
 
-# Nerf Entities - Crossbow Users
-pillager: true  # 1.14+ only
-piglin: true    # 1.16+ only
+entities:
+  # Bow Users (1.13+)
+  skeleton:
+    enabled: true
+    accuracy: 0.7
+  stray:
+    enabled: true
+    accuracy: 0.7
+  bogged:  # 1.21+ only
+    enabled: true
+    accuracy: 0.7
+
+  # Crossbow Users
+  pillager:  # 1.14+ only
+    enabled: true
+    accuracy: 0.7
+  piglin:  # 1.16+ only
+    enabled: true
+    accuracy: 0.7
 
 # Check for updates on plugin startup
 check-for-updates: true
@@ -67,14 +82,33 @@ debug: false
 
 ### Configuration Options
 
-- **accuracy** (0.0 - 1.0): Controls how much random deviation is added to mob projectiles. Default: 0.7
-- **skeleton**: Enable nerfs for Skeletons. Default: true
-- **stray**: Enable nerfs for Strays. Default: true
-- **bogged**: Enable nerfs for Bogged (1.21+ only). Default: true
-- **pillager**: Enable nerfs for Pillagers (1.14+ only). Default: true
-- **piglin**: Enable nerfs for Piglins (1.16+ only). Default: true
-- **check-for-updates**: Automatically check for updates on startup from GitHub releases. Default: true
+**Per-Entity Settings:**
+- Each entity has two settings:
+  - **enabled** (true/false): Whether to nerf this entity type
+  - **accuracy** (0.0 - 1.0+): How much deviation to add
+    - 0.0 = perfect aim (no nerf)
+    - 0.7 = default balanced nerf
+    - 1.0+ = very inaccurate
+
+**Entities:**
+- **skeleton**: Skeleton mobs. Default: enabled, accuracy 0.7
+- **stray**: Stray mobs. Default: enabled, accuracy 0.7
+- **bogged**: Bogged mobs (1.21+ only). Default: enabled, accuracy 0.7
+- **pillager**: Pillager mobs (1.14+ only). Default: enabled, accuracy 0.7
+- **piglin**: Piglin mobs (1.16+ only). Default: enabled, accuracy 0.7
+
+**Other Settings:**
+- **config-version**: Config format version (DO NOT MODIFY - used for automatic migrations)
+- **check-for-updates**: Automatically check for updates on startup. Default: true
 - **debug**: Enable detailed logging for troubleshooting. Default: false
+
+### Config Migration
+
+**Upgrading from v1.3.0 or earlier:**
+The plugin automatically migrates old config formats to the new per-entity format. Your settings will be preserved:
+- Old global `accuracy` value → applied to all entities
+- Old entity enable/disable settings → preserved
+- Migration happens automatically on first load
 
 ## Commands
 
