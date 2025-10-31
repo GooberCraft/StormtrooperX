@@ -19,6 +19,10 @@ updates:
       include: "scope"
     reviewers:
       - "mdw19873"
+    # Ignore H2 major version updates (2.3.x requires Java 11+, we need Java 8)
+    ignore:
+      - dependency-name: "com.h2database:h2"
+        update-types: ["version-update:semver-major"]
     # Group minor and patch updates together
     groups:
       test-dependencies:
