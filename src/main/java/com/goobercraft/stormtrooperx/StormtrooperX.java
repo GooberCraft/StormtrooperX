@@ -134,8 +134,8 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         debug = getConfig().getBoolean("debug", false);
 
         // Load per-entity configurations
-        loadEntityConfig("skeleton", EntityType.SKELETON, "1.13+");
-        loadEntityConfig("stray", EntityType.STRAY, "1.13+");
+        loadEntityConfig("skeleton", EntityType.SKELETON);
+        loadEntityConfig("stray", EntityType.STRAY);
         loadEntityConfig("bogged", "BOGGED", "1.21+");
         loadEntityConfig("pillager", "PILLAGER", "1.14+");
         loadEntityConfig("piglin", "PIGLIN", "1.16+");
@@ -193,9 +193,8 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
      *
      * @param configKey The key in the config file
      * @param entityType The EntityType enum value
-     * @param minVersion The minimum Minecraft version required
      */
-    private void loadEntityConfig(String configKey, EntityType entityType, String minVersion) {
+    private void loadEntityConfig(String configKey, EntityType entityType) {
         String path = "entities." + configKey;
 
         if (!getConfig().contains(path)) {
@@ -256,11 +255,9 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
      *
      * @param sender The command sender
      * @param entityType The entity type
-     * @param configKey The config key
      * @param displayName The display name
-     * @param versionNote Optional version note (e.g., "1.21+ only")
      */
-    private void displayEntityStatus(CommandSender sender, EntityType entityType, String configKey, String displayName, String versionNote) {
+    private void displayEntityStatus(CommandSender sender, EntityType entityType, String displayName) {
         EntityConfig config = entityConfigs.get(entityType);
         if (config != null && config.isEnabled()) {
             sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " + ChatColor.GREEN + "Enabled " + ChatColor.GRAY + "(accuracy: " + String.format("%.2f", config.getAccuracy()) + ")");
@@ -274,14 +271,13 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
      *
      * @param sender The command sender
      * @param entityTypeName The entity type name
-     * @param configKey The config key
      * @param displayName The display name
      * @param versionNote Version requirement note
      */
-    private void displayEntityStatus(CommandSender sender, String entityTypeName, String configKey, String displayName, String versionNote) {
+    private void displayEntityStatus(CommandSender sender, String entityTypeName, String displayName, String versionNote) {
         try {
             EntityType entityType = EntityType.valueOf(entityTypeName);
-            displayEntityStatus(sender, entityType, configKey, displayName, versionNote);
+            displayEntityStatus(sender, entityType, displayName);
         } catch (IllegalArgumentException e) {
             sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " +
                 ChatColor.GRAY + "Not available (" + versionNote + ")");
@@ -298,14 +294,14 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                 sender.sendMessage(ChatColor.YELLOW + "Debug Mode: " + ChatColor.WHITE + (debug ? "Enabled" : "Disabled"));
                 sender.sendMessage("");
                 sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Bow Users):");
-                displayEntityStatus(sender, EntityType.SKELETON, "skeleton", "Skeleton", null);
-                displayEntityStatus(sender, EntityType.STRAY, "stray", "Stray", null);
-                displayEntityStatus(sender, "BOGGED", "bogged", "Bogged", "1.21+ only");
+                displayEntityStatus(sender, EntityType.SKELETON, "Skeleton");
+                displayEntityStatus(sender, EntityType.STRAY, "Stray");
+                displayEntityStatus(sender, "BOGGED", "Bogged", "1.21+ only");
 
                 sender.sendMessage("");
                 sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Crossbow Users):");
-                displayEntityStatus(sender, "PILLAGER", "pillager", "Pillager", "1.14+ only");
-                displayEntityStatus(sender, "PIGLIN", "piglin", "Piglin", "1.16+ only");
+                displayEntityStatus(sender, "PILLAGER", "Pillager", "1.14+ only");
+                displayEntityStatus(sender, "PIGLIN", "Piglin", "1.16+ only");
 
                 sender.sendMessage("");
                 sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.YELLOW + "/stormtrooperx reload" + ChatColor.GRAY + " to reload the configuration.");
