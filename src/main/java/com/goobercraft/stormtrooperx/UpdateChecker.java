@@ -174,9 +174,8 @@ public class UpdateChecker {
             return Integer.parseInt(numeric.toString());
         } catch (NumberFormatException e) {
             // Handle overflow or invalid number (shouldn't happen with digits only, but be safe)
-            // Sanitize the part to prevent log injection attacks by removing all control characters
-            String sanitizedPart = part.replaceAll("[\\p{Cntrl}]", "");
-            plugin.getLogger().warning("Failed to parse version part: " + sanitizedPart);
+            // Log only the extracted numeric portion (digits only) to avoid log injection
+            plugin.getLogger().warning("Failed to parse version number (too large or invalid): " + numeric.toString());
             return 0;
         }
     }
