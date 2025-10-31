@@ -83,14 +83,14 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     }
 
     private void checkForUpdates() {
-        UpdateChecker updateChecker = new UpdateChecker(this, "mdw19873/stormtrooperx");
+        UpdateChecker updateChecker = new UpdateChecker(this, "GooberCraft/StormtrooperX");
         updateChecker.checkForUpdates((comparison, currentVersion, latestVersion) -> {
             if (comparison < 0) {
                 this.logger.info("========================================");
                 this.logger.warning("  A new update is available!");
                 this.logger.warning("  Current version: " + currentVersion);
                 this.logger.warning("  Latest version: " + latestVersion);
-                this.logger.warning("  Download: https://github.com/mdw19873/stormtrooperx/releases");
+                this.logger.warning("  Download: https://github.com/GooberCraft/StormtrooperX/releases");
                 this.logger.info("========================================");
             } else if (comparison == 0) {
                 this.logger.info("You are running the latest version!");

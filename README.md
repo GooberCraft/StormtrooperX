@@ -1,8 +1,8 @@
 # StormtrooperX
 
-[![Build Status](https://github.com/mdw19873/StormtrooperX/workflows/Build/badge.svg)](https://github.com/mdw19873/StormtrooperX/actions)
-[![License](https://img.shields.io/github/license/mdw19873/StormtrooperX)](LICENSE)
-[![GitHub release](https://img.shields.io/github/v/release/mdw19873/StormtrooperX)](https://github.com/mdw19873/StormtrooperX/releases)
+[![Build Status](https://github.com/GooberCraft/StormtrooperX/workflows/Build/badge.svg)](https://github.com/GooberCraft/StormtrooperX/actions)
+[![License](https://img.shields.io/github/license/GooberCraft/StormtrooperX)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/GooberCraft/StormtrooperX)](https://github.com/GooberCraft/StormtrooperX/releases)
 [![bStats Servers](https://img.shields.io/bstats/servers/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 [![bStats Players](https://img.shields.io/bstats/players/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 
@@ -94,7 +94,7 @@ debug: false
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/mdw19873/StormtrooperX.git
+   git clone https://github.com/GooberCraft/StormtrooperX.git
    cd StormtrooperX
    ```
 
@@ -151,11 +151,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-Contributions are welcome! Please check the [Code of Conduct](CODE_OF_CONDUCT.md) and review existing [Issues](https://github.com/mdw19873/StormtrooperX/issues) and [Pull Requests](https://github.com/mdw19873/StormtrooperX/pulls) before contributing.
+Contributions are welcome! Please check the [Code of Conduct](CODE_OF_CONDUCT.md) and review existing [Issues](https://github.com/GooberCraft/StormtrooperX/issues) and [Pull Requests](https://github.com/GooberCraft/StormtrooperX/pulls) before contributing.
 
 Ways to contribute:
-- 🐛 [Report bugs](https://github.com/mdw19873/StormtrooperX/issues/new?template=bug_report.yml)
-- 💡 [Suggest features](https://github.com/mdw19873/StormtrooperX/issues/new?template=feature_request.yml)
+- 🐛 [Report bugs](https://github.com/GooberCraft/StormtrooperX/issues/new?template=bug_report.yml)
+- 💡 [Suggest features](https://github.com/GooberCraft/StormtrooperX/issues/new?template=feature_request.yml)
 - 📖 Improve documentation
 - 🧪 Write tests
 - 💻 Submit pull requests

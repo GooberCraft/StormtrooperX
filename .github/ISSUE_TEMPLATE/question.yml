@@ -30,5 +30,5 @@ body:
       label: Before asking
       description: Please confirm you've done the following
       options:
-        - label: I've read the [README](https://github.com/mdw19873/StormtrooperX/blob/master/README.md)
-        - label: I've checked existing [issues](https://github.com/mdw19873/StormtrooperX/issues) for similar questions
+        - label: I've read the [README](https://github.com/GooberCraft/StormtrooperX/blob/master/README.md)
+        - label: I've checked existing [issues](https://github.com/GooberCraft/StormtrooperX/issues) for similar questions
