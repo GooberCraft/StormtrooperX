@@ -74,23 +74,38 @@ public class UpdateChecker {
 
             int responseCode = connection.getResponseCode();
             if (responseCode == 200) {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
+                // Limit response size to prevent memory exhaustion attacks
+                int contentLength = connection.getContentLength();
+                if (contentLength > 1024 * 1024) { // 1MB limit
+                    plugin.getLogger().warning("Response size too large, possible security issue");
+                    return null;
                 }
-                reader.close();
 
-                // Parse JSON response to get tag_name
-                String json = response.toString();
-                String tagName = extractJsonValue(json, "tag_name");
+                // Use try-with-resources to ensure proper resource cleanup
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    int totalChars = 0;
+                    while ((line = reader.readLine()) != null) {
+                        totalChars += line.length();
+                        // Additional runtime check to prevent memory exhaustion
+                        if (totalChars > 1024 * 1024) { // 1MB limit
+                            plugin.getLogger().warning("Response too large, aborting");
+                            return null;
+                        }
+                        response.append(line);
+                    }
 
-                // Remove 'v' prefix if present
-                if (tagName != null && tagName.startsWith("v")) {
-                    return tagName.substring(1);
+                    // Parse JSON response to get tag_name
+                    String json = response.toString();
+                    String tagName = extractJsonValue(json, "tag_name");
+
+                    // Remove 'v' prefix if present
+                    if (tagName != null && tagName.startsWith("v")) {
+                        return tagName.substring(1);
+                    }
+                    return tagName;
                 }
-                return tagName;
             }
 
         } catch (Exception e) {
@@ -173,9 +188,9 @@ public class UpdateChecker {
         try {
             return Integer.parseInt(numeric.toString());
         } catch (NumberFormatException e) {
-            // Handle overflow or invalid number (shouldn't happen with digits only, but be safe)
-            // Log only the extracted numeric portion (digits only) to avoid log injection
-            plugin.getLogger().warning("Failed to parse version number (too large or invalid): " + numeric.toString());
+            // Handle overflow or invalid number
+            // Only log safe, sanitized information to prevent log injection
+            plugin.getLogger().warning("Failed to parse version number: invalid numeric format");
             return 0;
         }
     }

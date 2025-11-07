@@ -39,8 +39,12 @@ public class DatabaseManager {
             // Load H2 driver
             Class.forName("org.h2.Driver");
 
-            // Create connection
-            String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + ";MODE=MySQL";
+            // Create connection with security options:
+            // - FILE_LOCK=SOCKET: Prevents concurrent access from multiple processes
+            // - TRACE_LEVEL_FILE=0: Disables trace logging to prevent information leakage
+            // - MODE=MySQL: MySQL compatibility mode
+            String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + 
+                ";MODE=MySQL;FILE_LOCK=SOCKET;TRACE_LEVEL_FILE=0";
             connection = DriverManager.getConnection(url, "sa", "");
 
             // Create table if it doesn't exist
@@ -76,6 +80,16 @@ public class DatabaseManager {
      * @return true if opted out, false otherwise
      */
     public boolean isOptedOut(UUID playerUUID) {
+        if (playerUUID == null) {
+            logger.warning("Attempted to check opt-out status with null UUID");
+            return false;
+        }
+
+        if (connection == null) {
+            logger.warning("Database connection not initialized");
+            return false;
+        }
+
         String query = "SELECT opted_out FROM player_optouts WHERE uuid = ?";
 
         try (PreparedStatement statement = connection.prepareStatement(query)) {
@@ -100,6 +114,16 @@ public class DatabaseManager {
      * @param optedOut Whether the player is opted out
      */
     public void setOptOut(UUID playerUUID, boolean optedOut) {
+        if (playerUUID == null) {
+            logger.warning("Attempted to set opt-out status with null UUID");
+            return;
+        }
+
+        if (connection == null) {
+            logger.warning("Database connection not initialized");
+            return;
+        }
+
         String upsertSQL = "MERGE INTO player_optouts (uuid, opted_out, updated_at) " +
                 "KEY(uuid) VALUES (?, ?, CURRENT_TIMESTAMP)";
 

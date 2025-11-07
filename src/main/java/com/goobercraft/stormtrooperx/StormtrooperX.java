@@ -305,10 +305,14 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
 
                 sender.sendMessage("");
                 sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.YELLOW + "/stormtrooperx reload" + ChatColor.GRAY + " to reload the configuration.");
+                sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.YELLOW + "/stormtrooperx optout" + ChatColor.GRAY + " to toggle personal opt-out.");
                 return true;
             }
 
-            if (args[0].equalsIgnoreCase("reload")) {
+            // Validate args[0] exists before accessing
+            String subCommand = args[0].toLowerCase();
+
+            if (subCommand.equals("reload")) {
                 if (!sender.hasPermission("stormtrooperx.reload")) {
                     sender.sendMessage(ChatColor.RED + "You don't have permission to reload the configuration!");
                     return true;
@@ -320,7 +324,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                 return true;
             }
 
-            if (args[0].equalsIgnoreCase("optout") || args[0].equalsIgnoreCase("toggle")) {
+            if (subCommand.equals("optout") || subCommand.equals("toggle")) {
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(ChatColor.RED + "Only players can use this command!");
                     return true;
@@ -343,6 +347,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                 }
                 return true;
             }
+
+            // Unknown subcommand
+            sender.sendMessage(ChatColor.RED + "Unknown command. Use /stormtrooperx for help.");
+            return true;
         }
 
         return false;
