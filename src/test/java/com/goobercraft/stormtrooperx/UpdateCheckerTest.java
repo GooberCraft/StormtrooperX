@@ -310,14 +310,11 @@ class UpdateCheckerTest {
         method.setAccessible(true);
 
         // Create a very large JSON string to test memory handling
-        StringBuilder largeJson = new StringBuilder("{\"other_field\":\"");
-        for (int i = 0; i < 1000; i++) {
-            largeJson.append("x");
-        }
-        largeJson.append("\",\"tag_name\":\"v1.0.0\"}");
+        String largeValue = "x".repeat(1000);
+        String largeJson = "{\"other_field\":\"" + largeValue + "\",\"tag_name\":\"v1.0.0\"}";
 
         // Should extract correctly even with large JSON
-        String result = (String) method.invoke(updateChecker, largeJson.toString(), "tag_name");
+        String result = (String) method.invoke(updateChecker, largeJson, "tag_name");
         assertEquals("v1.0.0", result);
     }
 }

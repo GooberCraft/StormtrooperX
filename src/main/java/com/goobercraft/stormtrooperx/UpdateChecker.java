@@ -93,9 +93,11 @@ public class UpdateChecker {
                     int totalChars = 0;
                     while ((line = reader.readLine()) != null) {
                         totalChars += line.length();
-                        // Runtime check to prevent memory exhaustion
-                        // Note: Uses character count rather than byte count for simplicity
-                        // The limit is generous enough (1MB) that this is sufficient for attack prevention
+                        // Runtime check to prevent memory exhaustion attacks
+                        // Note: We use character count rather than byte count for simplicity.
+                        // In Java, chars are UTF-16 (2 bytes each), so actual memory usage may be 2x this limit,
+                        // but the limit is generous (1MB of chars = ~2MB memory) and sufficient for legitimate 
+                        // GitHub API responses (~10KB typical). This is a security control, not exact accounting.
                         if (totalChars > MAX_RESPONSE_SIZE_BYTES) {
                             plugin.getLogger().warning("Response too large, aborting");
                             return null;
