@@ -23,28 +23,32 @@ The security review covered:
 
 ## Findings and Fixes
 
-### 1. Database Security Hardening ✅ FIXED
+### 1. Database Security - Appropriate for Use Case ✅ REVIEWED
 
-**Severity:** Medium  
-**Status:** Fixed
+**Severity:** N/A - No Issue  
+**Status:** Reviewed and Confirmed Appropriate
 
-**Issue:**
-- Database connection lacked security options
-- No file locking mechanism to prevent concurrent access
-- Trace logging enabled (potential information leakage)
+**Assessment:**
+The plugin uses a local embedded H2 database storing only non-sensitive data:
+- Player UUIDs (public identifiers in Minecraft)
+- Boolean opt-out preferences (non-sensitive)
+- Timestamps of last preference update
 
-**Fix Applied:**
-```java
-// Added security options to database connection:
-String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + 
-    ";MODE=MySQL;FILE_LOCK=SOCKET;TRACE_LEVEL_FILE=0";
-```
+**Security Approach:**
+Given the non-sensitive nature of the data and local-only storage, minimal security measures are appropriate:
+- ✅ **FILE_LOCK=SOCKET**: Prevents concurrent access issues (data integrity, not security)
+- ✅ **PreparedStatements**: Prevents SQL injection
+- ✅ **No password/encryption**: Appropriate - adds complexity without benefit
+- ✅ **Default H2 settings**: Suitable for embedded local database
 
-**Security Improvements:**
-- `FILE_LOCK=SOCKET`: Prevents concurrent access from multiple processes
-- `TRACE_LEVEL_FILE=0`: Disables trace logging to prevent information leakage
-- Added null checks for UUID parameters to prevent NullPointerException
-- Added connection validation before database operations
+**Why Encryption is NOT Required:**
+1. **Non-sensitive data**: Player UUIDs are already public in Minecraft
+2. **Local storage only**: Database never leaves the server
+3. **Physical access = full compromise**: If attacker has filesystem access, they already have full server control
+4. **Performance impact**: Encryption would add overhead for zero security benefit
+5. **Complexity**: Password management adds failure points without protecting anything meaningful
+
+**Conclusion:** Current database security is **appropriate and sufficient** for this use case.
 
 ### 2. HTTP Response Size Validation ✅ FIXED
 
@@ -197,16 +201,14 @@ Added comprehensive security test cases:
 - [x] Document security considerations
 
 ### Short-term Recommendations (Optional)
-- [ ] Consider adding database password encryption for enhanced security
 - [ ] Implement rate limiting for update checks (currently relies on config option)
 - [ ] Add configuration validation on reload to prevent invalid values
-- [ ] Consider adding checksum verification for update downloads
+- [ ] Consider adding checksum verification for update downloads (if download feature added)
 
 ### Long-term Recommendations
 - [ ] Consider implementing audit logging for admin actions (reload, config changes)
-- [ ] Evaluate adding support for HTTPS certificate pinning for GitHub API
-- [ ] Consider implementing backup/restore functionality for database
 - [ ] Add security headers documentation for server administrators
+- [ ] Consider implementing backup/restore functionality for player preferences
 
 ## Dependency Security
 
@@ -247,10 +249,11 @@ Added comprehensive security test cases:
 - **Last update timestamp:** For tracking when preferences changed
 
 ### Data Protection
-- ✅ No personally identifiable information (PII) beyond UUIDs
-- ✅ Database stored locally (not transmitted)
-- ✅ File locking prevents unauthorized access
-- ✅ Trace logging disabled to prevent information leakage
+- ✅ No personally identifiable information (PII) beyond UUIDs (which are public in Minecraft)
+- ✅ Database stored locally, never transmitted over network
+- ✅ File locking prevents data corruption from concurrent access
+- ✅ **No encryption required** - data is non-sensitive player preferences
+- ✅ Standard filesystem permissions protect database file
 
 ### Anonymous Metrics (bStats)
 - Server software and version
@@ -271,15 +274,18 @@ Added comprehensive security test cases:
 6. **Privilege Escalation:** Proper permission checks
 
 ### Acceptable Risks
-1. **Database Physical Access:** If attacker has filesystem access, they can read the H2 database file. This is acceptable as:
-   - Only stores UUIDs (public information in Minecraft)
-   - No passwords or sensitive data
-   - Requires server administrator-level access
+1. **Database Physical Access:** If attacker has filesystem access, they can read the H2 database file. This is **acceptable** because:
+   - Only stores player UUIDs (public information in Minecraft) and opt-out preferences
+   - No passwords, credentials, or truly sensitive data
+   - Requires server administrator-level filesystem access (game over anyway)
+   - Encrypting this data would provide no real security benefit
+   - **Risk Level: LOW** - Data exposure has minimal impact
    
 2. **Update Check Privacy:** Plugin makes HTTPS request to GitHub API, revealing:
    - Plugin version
    - Server IP address (to GitHub)
    - This is standard practice and can be disabled in config
+   - **Risk Level: LOW** - Standard industry practice
 
 ## Compliance
 

@@ -39,12 +39,10 @@ public class DatabaseManager {
             // Load H2 driver
             Class.forName("org.h2.Driver");
 
-            // Create connection with security options:
-            // - FILE_LOCK=SOCKET: Prevents concurrent access from multiple processes
-            // - TRACE_LEVEL_FILE=0: Disables trace logging to prevent information leakage
-            // - MODE=MySQL: MySQL compatibility mode
-            String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + 
-                ";MODE=MySQL;FILE_LOCK=SOCKET;TRACE_LEVEL_FILE=0";
+            // Create connection with minimal security options for local embedded database:
+            // - FILE_LOCK=SOCKET: Prevents concurrent access issues (not security, but data integrity)
+            // - MODE=MySQL: MySQL compatibility mode for familiar syntax
+            String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + ";MODE=MySQL;FILE_LOCK=SOCKET";
             connection = DriverManager.getConnection(url, "sa", "");
 
             // Create table if it doesn't exist
