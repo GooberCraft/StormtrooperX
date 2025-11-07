@@ -246,7 +246,9 @@ class DatabaseManagerTest {
         }
 
         // Final values should be correct
-        assertTrue(databaseManager.isOptedOut(player1));
-        assertFalse(databaseManager.isOptedOut(player2));
+        // When i=99: i%2==0 is false, so player1 gets false (not opted out)
+        // When i=99: i%2!=0 is true, so player2 gets true (opted out)
+        assertFalse(databaseManager.isOptedOut(player1));
+        assertTrue(databaseManager.isOptedOut(player2));
     }
 }
