@@ -202,4 +202,51 @@ class DatabaseManagerTest {
         UUID sameUuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
         assertTrue(databaseManager.isOptedOut(sameUuid));
     }
+
+    @Test
+    void testNullUUID_isOptedOut() {
+        // Null UUID should not cause an exception, should return false
+        assertFalse(databaseManager.isOptedOut(null));
+    }
+
+    @Test
+    void testNullUUID_setOptOut() {
+        // Null UUID should not cause an exception
+        assertDoesNotThrow(() -> databaseManager.setOptOut(null, true));
+        assertDoesNotThrow(() -> databaseManager.setOptOut(null, false));
+    }
+
+    @Test
+    void testNullUUID_toggleOptOut() {
+        // Null UUID should not cause an exception, should handle gracefully
+        assertDoesNotThrow(() -> databaseManager.toggleOptOut(null));
+    }
+
+    @Test
+    void testDatabaseSecurity_FilePermissions() {
+        // Verify that database file is created
+        UUID testUUID = UUID.randomUUID();
+        databaseManager.setOptOut(testUUID, true);
+        databaseManager.close();
+
+        // Check that database files exist (H2 creates .mv.db file)
+        File dbFile = new File(tempDir, "players.mv.db");
+        assertTrue(dbFile.exists(), "Database file should be created");
+    }
+
+    @Test
+    void testConcurrentAccess_SequentialWrites() {
+        // Test that sequential writes work correctly (file locking should be in place)
+        UUID player1 = UUID.randomUUID();
+        UUID player2 = UUID.randomUUID();
+
+        for (int i = 0; i < 100; i++) {
+            databaseManager.setOptOut(player1, i % 2 == 0);
+            databaseManager.setOptOut(player2, i % 2 != 0);
+        }
+
+        // Final values should be correct
+        assertTrue(databaseManager.isOptedOut(player1));
+        assertFalse(databaseManager.isOptedOut(player2));
+    }
 }

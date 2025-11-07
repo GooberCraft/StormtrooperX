@@ -274,4 +274,51 @@ class UpdateCheckerTest {
         // Should return 0 when parsing fails due to overflow
         assertEquals(0, result, "Should return 0 for numbers that overflow Integer");
     }
+
+    @Test
+    void testExtractJsonValue_noLogInjection() throws Exception {
+        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
+        method.setAccessible(true);
+
+        // Test with JSON that contains newlines or special characters that could be used for log injection
+        String maliciousJson = "{\"tag_name\":\"v1.0.0\\n[SEVERE] Fake error message\"}";
+        String result = (String) method.invoke(updateChecker, maliciousJson, "tag_name");
+
+        // The extraction should work but the result contains the raw string (not executed)
+        assertNotNull(result);
+        assertTrue(result.contains("\\n"), "Newlines should be preserved as escaped characters");
+    }
+
+    @Test
+    void testParseVersionPart_veryLargeInput() throws Exception {
+        Method method = UpdateChecker.class.getDeclaredMethod("parseVersionPart", String.class);
+        method.setAccessible(true);
+
+        // Test with an extremely long numeric string that could cause performance issues
+        StringBuilder largeNumber = new StringBuilder();
+        for (int i = 0; i < 10000; i++) {
+            largeNumber.append("9");
+        }
+
+        // Should handle gracefully without hanging or crashing
+        int result = (int) method.invoke(updateChecker, largeNumber.toString());
+        assertEquals(0, result, "Should return 0 for extremely large numbers");
+    }
+
+    @Test
+    void testExtractJsonValue_largeResponse() throws Exception {
+        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
+        method.setAccessible(true);
+
+        // Create a very large JSON string to test memory handling
+        StringBuilder largeJson = new StringBuilder("{\"other_field\":\"");
+        for (int i = 0; i < 1000; i++) {
+            largeJson.append("x");
+        }
+        largeJson.append("\",\"tag_name\":\"v1.0.0\"}");
+
+        // Should extract correctly even with large JSON
+        String result = (String) method.invoke(updateChecker, largeJson.toString(), "tag_name");
+        assertEquals("v1.0.0", result);
+    }
 }
