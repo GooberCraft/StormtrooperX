@@ -93,7 +93,9 @@ public class UpdateChecker {
                     int totalChars = 0;
                     while ((line = reader.readLine()) != null) {
                         totalChars += line.length();
-                        // Additional runtime check to prevent memory exhaustion
+                        // Runtime check to prevent memory exhaustion
+                        // Note: Uses character count rather than byte count for simplicity
+                        // The limit is generous enough (1MB) that this is sufficient for attack prevention
                         if (totalChars > MAX_RESPONSE_SIZE_BYTES) {
                             plugin.getLogger().warning("Response too large, aborting");
                             return null;

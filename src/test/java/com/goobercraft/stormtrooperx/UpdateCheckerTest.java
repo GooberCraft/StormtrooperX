@@ -297,13 +297,10 @@ class UpdateCheckerTest {
         method.setAccessible(true);
 
         // Test with an extremely long numeric string that could cause performance issues
-        StringBuilder largeNumber = new StringBuilder();
-        for (int i = 0; i < 10000; i++) {
-            largeNumber.append("9");
-        }
+        String largeNumber = "9".repeat(10000);
 
         // Should handle gracefully without hanging or crashing
-        int result = (int) method.invoke(updateChecker, largeNumber.toString());
+        int result = (int) method.invoke(updateChecker, largeNumber);
         assertEquals(0, result, "Should return 0 for extremely large numbers");
     }
 

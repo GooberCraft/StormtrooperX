@@ -72,19 +72,33 @@ public class DatabaseManager {
     }
 
     /**
+     * Validates that the UUID is not null and the database connection is initialized.
+     *
+     * @param playerUUID Player's UUID to validate
+     * @return true if validation passes, false otherwise
+     */
+    private boolean validateDatabaseOperation(UUID playerUUID) {
+        if (playerUUID == null) {
+            logger.warning("Attempted database operation with null UUID");
+            return false;
+        }
+
+        if (connection == null) {
+            logger.warning("Database connection not initialized");
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Checks if a player has opted out.
      *
      * @param playerUUID Player's UUID
      * @return true if opted out, false otherwise
      */
     public boolean isOptedOut(UUID playerUUID) {
-        if (playerUUID == null) {
-            logger.warning("Attempted to check opt-out status with null UUID");
-            return false;
-        }
-
-        if (connection == null) {
-            logger.warning("Database connection not initialized");
+        if (!validateDatabaseOperation(playerUUID)) {
             return false;
         }
 
@@ -112,13 +126,7 @@ public class DatabaseManager {
      * @param optedOut Whether the player is opted out
      */
     public void setOptOut(UUID playerUUID, boolean optedOut) {
-        if (playerUUID == null) {
-            logger.warning("Attempted to set opt-out status with null UUID");
-            return;
-        }
-
-        if (connection == null) {
-            logger.warning("Database connection not initialized");
+        if (!validateDatabaseOperation(playerUUID)) {
             return;
         }
 
@@ -141,8 +149,7 @@ public class DatabaseManager {
      * @return The new opt-out status
      */
     public boolean toggleOptOut(UUID playerUUID) {
-        if (playerUUID == null) {
-            logger.warning("Attempted to toggle opt-out status with null UUID");
+        if (!validateDatabaseOperation(playerUUID)) {
             return false;
         }
 
