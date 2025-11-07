@@ -17,6 +17,9 @@ public class UpdateChecker {
     private final Plugin plugin;
     private final String githubRepo;
     private String latestVersion;
+    
+    // Maximum allowed response size to prevent memory exhaustion attacks
+    private static final int MAX_RESPONSE_SIZE_BYTES = 1024 * 1024; // 1MB
 
     /**
      * Creates a new update checker.
@@ -76,10 +79,12 @@ public class UpdateChecker {
             if (responseCode == 200) {
                 // Limit response size to prevent memory exhaustion attacks
                 int contentLength = connection.getContentLength();
-                if (contentLength > 1024 * 1024) { // 1MB limit
+                if (contentLength > MAX_RESPONSE_SIZE_BYTES) {
                     plugin.getLogger().warning("Response size too large, possible security issue");
                     return null;
                 }
+                // Note: contentLength may be -1 if server doesn't provide Content-Length header
+                // The runtime check below will still protect against large responses
 
                 // Use try-with-resources to ensure proper resource cleanup
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
@@ -89,7 +94,7 @@ public class UpdateChecker {
                     while ((line = reader.readLine()) != null) {
                         totalChars += line.length();
                         // Additional runtime check to prevent memory exhaustion
-                        if (totalChars > 1024 * 1024) { // 1MB limit
+                        if (totalChars > MAX_RESPONSE_SIZE_BYTES) {
                             plugin.getLogger().warning("Response too large, aborting");
                             return null;
                         }

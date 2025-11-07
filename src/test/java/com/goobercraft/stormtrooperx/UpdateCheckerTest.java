@@ -276,15 +276,17 @@ class UpdateCheckerTest {
     }
 
     @Test
-    void testExtractJsonValue_noLogInjection() throws Exception {
+    void testExtractJsonValue_maliciousContentNotExecuted() throws Exception {
         Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
         method.setAccessible(true);
 
         // Test with JSON that contains newlines or special characters that could be used for log injection
+        // The important security aspect is that the JSON parsing itself doesn't execute/interpret this content
         String maliciousJson = "{\"tag_name\":\"v1.0.0\\n[SEVERE] Fake error message\"}";
         String result = (String) method.invoke(updateChecker, maliciousJson, "tag_name");
 
-        // The extraction should work but the result contains the raw string (not executed)
+        // The extraction should work but return the raw string (not executed/interpreted)
+        // The actual logging happens elsewhere and is outside the scope of extractJsonValue
         assertNotNull(result);
         assertTrue(result.contains("\\n"), "Newlines should be preserved as escaped characters");
     }

@@ -141,6 +141,11 @@ public class DatabaseManager {
      * @return The new opt-out status
      */
     public boolean toggleOptOut(UUID playerUUID) {
+        if (playerUUID == null) {
+            logger.warning("Attempted to toggle opt-out status with null UUID");
+            return false;
+        }
+
         boolean currentStatus = isOptedOut(playerUUID);
         boolean newStatus = !currentStatus;
         setOptOut(playerUUID, newStatus);
