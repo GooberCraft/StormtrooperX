@@ -17,6 +17,9 @@ public class UpdateChecker {
     private final Plugin plugin;
     private final String githubRepo;
     private String latestVersion;
+    
+    // Maximum allowed response size to prevent memory exhaustion attacks
+    private static final int MAX_RESPONSE_SIZE_BYTES = 1024 * 1024; // 1MB
 
     /**
      * Creates a new update checker.
@@ -74,23 +77,44 @@ public class UpdateChecker {
 
             int responseCode = connection.getResponseCode();
             if (responseCode == 200) {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
+                // Limit response size to prevent memory exhaustion attacks
+                int contentLength = connection.getContentLength();
+                if (contentLength > MAX_RESPONSE_SIZE_BYTES) {
+                    plugin.getLogger().warning("Response size too large, possible security issue");
+                    return null;
                 }
-                reader.close();
+                // Note: contentLength may be -1 if server doesn't provide Content-Length header
+                // The runtime check below will still protect against large responses
 
-                // Parse JSON response to get tag_name
-                String json = response.toString();
-                String tagName = extractJsonValue(json, "tag_name");
+                // Use try-with-resources to ensure proper resource cleanup
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    int totalChars = 0;
+                    while ((line = reader.readLine()) != null) {
+                        totalChars += line.length();
+                        // Runtime check to prevent memory exhaustion attacks
+                        // Note: We use character count rather than byte count for simplicity.
+                        // In Java, chars are UTF-16 (2 bytes each), so actual memory usage may be 2x this limit,
+                        // but the limit is generous (1MB of chars = ~2MB memory) and sufficient for legitimate 
+                        // GitHub API responses (~10KB typical). This is a security control, not exact accounting.
+                        if (totalChars > MAX_RESPONSE_SIZE_BYTES) {
+                            plugin.getLogger().warning("Response too large, aborting");
+                            return null;
+                        }
+                        response.append(line);
+                    }
 
-                // Remove 'v' prefix if present
-                if (tagName != null && tagName.startsWith("v")) {
-                    return tagName.substring(1);
+                    // Parse JSON response to get tag_name
+                    String json = response.toString();
+                    String tagName = extractJsonValue(json, "tag_name");
+
+                    // Remove 'v' prefix if present
+                    if (tagName != null && tagName.startsWith("v")) {
+                        return tagName.substring(1);
+                    }
+                    return tagName;
                 }
-                return tagName;
             }
 
         } catch (Exception e) {
@@ -173,9 +197,9 @@ public class UpdateChecker {
         try {
             return Integer.parseInt(numeric.toString());
         } catch (NumberFormatException e) {
-            // Handle overflow or invalid number (shouldn't happen with digits only, but be safe)
-            // Log only the extracted numeric portion (digits only) to avoid log injection
-            plugin.getLogger().warning("Failed to parse version number (too large or invalid): " + numeric.toString());
+            // Handle overflow or invalid number
+            // Only log safe, sanitized information to prevent log injection
+            plugin.getLogger().warning("Failed to parse version number: invalid numeric format");
             return 0;
         }
     }

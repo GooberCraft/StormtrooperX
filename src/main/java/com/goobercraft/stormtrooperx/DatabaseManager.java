@@ -39,8 +39,10 @@ public class DatabaseManager {
             // Load H2 driver
             Class.forName("org.h2.Driver");
 
-            // Create connection
-            String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + ";MODE=MySQL";
+            // Create connection with minimal security options for local embedded database:
+            // - FILE_LOCK=SOCKET: Prevents concurrent access issues (not security, but data integrity)
+            // - MODE=MySQL: MySQL compatibility mode for familiar syntax
+            String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + ";MODE=MySQL;FILE_LOCK=SOCKET";
             connection = DriverManager.getConnection(url, "sa", "");
 
             // Create table if it doesn't exist
@@ -70,12 +72,36 @@ public class DatabaseManager {
     }
 
     /**
+     * Validates that the UUID is not null and the database connection is initialized.
+     *
+     * @param playerUUID Player's UUID to validate
+     * @return true if validation passes, false otherwise
+     */
+    private boolean validateDatabaseOperation(UUID playerUUID) {
+        if (playerUUID == null) {
+            logger.warning("Attempted database operation with null UUID");
+            return false;
+        }
+
+        if (connection == null) {
+            logger.warning("Database connection not initialized");
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Checks if a player has opted out.
      *
      * @param playerUUID Player's UUID
      * @return true if opted out, false otherwise
      */
     public boolean isOptedOut(UUID playerUUID) {
+        if (!validateDatabaseOperation(playerUUID)) {
+            return false;
+        }
+
         String query = "SELECT opted_out FROM player_optouts WHERE uuid = ?";
 
         try (PreparedStatement statement = connection.prepareStatement(query)) {
@@ -100,6 +126,10 @@ public class DatabaseManager {
      * @param optedOut Whether the player is opted out
      */
     public void setOptOut(UUID playerUUID, boolean optedOut) {
+        if (!validateDatabaseOperation(playerUUID)) {
+            return;
+        }
+
         String upsertSQL = "MERGE INTO player_optouts (uuid, opted_out, updated_at) " +
                 "KEY(uuid) VALUES (?, ?, CURRENT_TIMESTAMP)";
 
@@ -119,6 +149,10 @@ public class DatabaseManager {
      * @return The new opt-out status
      */
     public boolean toggleOptOut(UUID playerUUID) {
+        if (!validateDatabaseOperation(playerUUID)) {
+            return false;
+        }
+
         boolean currentStatus = isOptedOut(playerUUID);
         boolean newStatus = !currentStatus;
         setOptOut(playerUUID, newStatus);
