@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2025-11-08
+
+### Security
+- Added HTTP response size limit (1MB) to prevent memory exhaustion from malicious GitHub API responses
+- Implemented runtime validation during response reading with abort on oversized responses
+- Fixed log injection vulnerability by removing user-controlled data from log output in version parsing
+- Added input validation helper `validateDatabaseOperation(UUID)` to prevent null pointer exceptions
+
+### Fixed
+- Fixed resource leak in `UpdateChecker.fetchLatestVersion()` by using try-with-resources for BufferedReader
+- Fixed inverted assertions in concurrent access tests
+- Added explicit unknown subcommand handling with user feedback
+
+### Changed
+- Database now uses `FILE_LOCK=SOCKET` to prevent data corruption from concurrent access
+- Improved error logging consistency for null UUIDs and uninitialized database connections
+- Refactored DatabaseManager to eliminate duplicated null checks
+
+### Added
+- Security-focused test cases for null input handling, large input handling, and malicious content parsing
+- Test for parseVersionPart overflow handling
+- Comprehensive security review documentation
+
+## [1.5.0] - 2025-11-08
+
+### Changed
+- Migrated minimum Java version from Java 8 to Java 11
+- Improved code quality and removed unused parameters
+
 ## [1.4.0] - 2025-10-31
 
 ### Added
@@ -131,6 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.1]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.5.1
+[1.5.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.5.0
 [1.4.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.4.0
 [1.3.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.3.0
 [1.2.2]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.2.2
