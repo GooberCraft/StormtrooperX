@@ -3,6 +3,8 @@
 [![Build Status](https://github.com/GooberCraft/StormtrooperX/workflows/Build/badge.svg)](https://github.com/GooberCraft/StormtrooperX/actions)
 [![License](https://img.shields.io/github/license/GooberCraft/StormtrooperX)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/GooberCraft/StormtrooperX)](https://github.com/GooberCraft/StormtrooperX/releases)
+[![SpigotMC](https://img.shields.io/spiget/downloads/130400)](https://www.spigotmc.org/resources/stormtrooperx.130400/)
+[![SpigotMC Rating](https://img.shields.io/spiget/rating/130400)](https://www.spigotmc.org/resources/stormtrooperx.130400/)
 [![bStats Servers](https://img.shields.io/bstats/servers/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 [![bStats Players](https://img.shields.io/bstats/players/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 
@@ -36,7 +38,9 @@ A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs lik
 
 ## Installation
 
-1. Download the latest release from the [Releases](../../releases) page
+1. Download the latest release from:
+   - [GitHub Releases](../../releases) page
+   - [SpigotMC](https://www.spigotmc.org/resources/stormtrooperx.130400/)
 2. Place `StormtrooperX.jar` in your server's `plugins` folder
 3. Restart your server or use a plugin manager to load it
 4. Configure the plugin in `plugins/StormtrooperX/config.yml`
