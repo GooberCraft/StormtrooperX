@@ -40,6 +40,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     private final java.util.Map<EntityType, EntityConfig> entityConfigs = new java.util.HashMap<>();
     private boolean debug = false;
     private DatabaseManager databaseManager;
+    private OptOutManager optOutManager;
 
     /**
      * Configuration for a specific entity type.
@@ -50,7 +51,8 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
 
         EntityConfig(boolean enabled, double accuracy) {
             this.enabled = enabled;
-            this.accuracy = accuracy;
+            // Defensive: clamp accuracy to valid range [0.0, 1.0] at construction time
+            this.accuracy = Math.max(0.0, Math.min(1.0, accuracy));
         }
 
         public boolean isEnabled() {
@@ -70,6 +72,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         // Initialize database
         databaseManager = new DatabaseManager(logger, getDataFolder());
         databaseManager.initialize();
+
+        // Initialize opt-out manager with async support and server max players for cache sizing
+        optOutManager = new OptOutManager(logger, databaseManager, this, getServer().getMaxPlayers());
+        this.getServer().getPluginManager().registerEvents(optOutManager, this);
 
         loadConfiguration();
 
@@ -91,6 +97,11 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        // Shutdown opt-out manager
+        if (optOutManager != null) {
+            optOutManager.shutdown();
+        }
+
         // Close database connection
         if (databaseManager != null) {
             databaseManager.close();
@@ -103,7 +114,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     }
 
     private void checkForUpdates() {
-        UpdateChecker updateChecker = new UpdateChecker(this, "GooberCraft/StormtrooperX");
+        final UpdateChecker updateChecker = new UpdateChecker(this, "GooberCraft/StormtrooperX");
         updateChecker.checkForUpdates((comparison, currentVersion, latestVersion) -> {
             if (comparison < 0) {
                 this.logger.info("========================================");
@@ -124,7 +135,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         entityConfigs.clear();
 
         // Check config version and migrate if needed
-        int configVersion = getConfig().getInt("config-version", 1);
+        final int configVersion = getConfig().getInt("config-version", 1);
         if (configVersion < 2) {
             this.logger.info("Detected old config format (v1). Migrating to v2...");
             migrateConfigToV2();
@@ -146,14 +157,14 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
      */
     private void migrateConfigToV2() {
         // Read old format values
-        double globalAccuracy = getConfig().getDouble("accuracy", 0.7);
-        boolean skeletonEnabled = getConfig().getBoolean("skeleton", true);
-        boolean strayEnabled = getConfig().getBoolean("stray", true);
-        boolean boggedEnabled = getConfig().getBoolean("bogged", true);
-        boolean pillagerEnabled = getConfig().getBoolean("pillager", true);
-        boolean piglinEnabled = getConfig().getBoolean("piglin", true);
-        boolean checkUpdates = getConfig().getBoolean("check-for-updates", true);
-        boolean debugMode = getConfig().getBoolean("debug", false);
+        final double globalAccuracy = getConfig().getDouble("accuracy", 0.7);
+        final boolean skeletonEnabled = getConfig().getBoolean("skeleton", true);
+        final boolean strayEnabled = getConfig().getBoolean("stray", true);
+        final boolean boggedEnabled = getConfig().getBoolean("bogged", true);
+        final boolean pillagerEnabled = getConfig().getBoolean("pillager", true);
+        final boolean piglinEnabled = getConfig().getBoolean("piglin", true);
+        final boolean checkUpdates = getConfig().getBoolean("check-for-updates", true);
+        final boolean debugMode = getConfig().getBoolean("debug", false);
 
         // Clear old config
         getConfig().set("accuracy", null);
@@ -195,14 +206,19 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
      * @param entityType The EntityType enum value
      */
     private void loadEntityConfig(String configKey, EntityType entityType) {
-        String path = "entities." + configKey;
+        final String path = "entities." + configKey;
 
         if (!getConfig().contains(path)) {
             return;
         }
 
-        boolean enabled = getConfig().getBoolean(path + ".enabled", true);
-        double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
+        final boolean enabled = getConfig().getBoolean(path + ".enabled", true);
+        final double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
+
+        // Warn if accuracy is out of valid range
+        if (accuracy < 0.0 || accuracy > 1.0) {
+            this.logger.warning(String.format("Entity '%s' has out-of-range accuracy value: %.2f (valid range: 0.0-1.0). Value will be clamped at runtime.", capitalize(configKey), accuracy));
+        }
 
         if (enabled) {
             entityConfigs.put(entityType, new EntityConfig(true, accuracy));
@@ -218,21 +234,27 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
      * @param minVersion The minimum Minecraft version required
      */
     private void loadEntityConfig(String configKey, String entityTypeName, String minVersion) {
-        String path = "entities." + configKey;
+        final String path = "entities." + configKey;
 
         if (!getConfig().contains(path)) {
             return;
         }
 
-        boolean enabled = getConfig().getBoolean(path + ".enabled", true);
+        final boolean enabled = getConfig().getBoolean(path + ".enabled", true);
 
         if (!enabled) {
             return;
         }
 
         try {
-            EntityType entityType = EntityType.valueOf(entityTypeName);
-            double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
+            final EntityType entityType = EntityType.valueOf(entityTypeName);
+            final double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
+
+            // Warn if accuracy is out of valid range
+            if (accuracy < 0.0 || accuracy > 1.0) {
+                this.logger.warning(String.format("Entity '%s' has out-of-range accuracy value: %.2f (valid range: 0.0-1.0). Value will be clamped at runtime.", capitalize(configKey), accuracy));
+            }
+
             entityConfigs.put(entityType, new EntityConfig(true, accuracy));
             this.logger.info(String.format("Entity '%s' will be nerfed! (accuracy: %.2f)", capitalize(configKey), accuracy));
         } catch (IllegalArgumentException e) {
@@ -258,7 +280,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
      * @param displayName The display name
      */
     private void displayEntityStatus(CommandSender sender, EntityType entityType, String displayName) {
-        EntityConfig config = entityConfigs.get(entityType);
+        final EntityConfig config = entityConfigs.get(entityType);
         if (config != null && config.isEnabled()) {
             sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " + ChatColor.GREEN + "Enabled " + ChatColor.GRAY + "(accuracy: " + String.format("%.2f", config.getAccuracy()) + ")");
         } else {
@@ -276,11 +298,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
      */
     private void displayEntityStatus(CommandSender sender, String entityTypeName, String displayName, String versionNote) {
         try {
-            EntityType entityType = EntityType.valueOf(entityTypeName);
+            final EntityType entityType = EntityType.valueOf(entityTypeName);
             displayEntityStatus(sender, entityType, displayName);
         } catch (IllegalArgumentException e) {
-            sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " +
-                ChatColor.GRAY + "Not available (" + versionNote + ")");
+            sender.sendMessage(ChatColor.WHITE + "  - " + displayName + ": " + ChatColor.GRAY + "Not available (" + versionNote + ")");
         }
     }
 
@@ -310,7 +331,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
             }
 
             // Validate args[0] exists before accessing
-            String subCommand = args[0].toLowerCase();
+            final String subCommand = args[0].toLowerCase();
 
             if (subCommand.equals("reload")) {
                 if (!sender.hasPermission("stormtrooperx.reload")) {
@@ -335,8 +356,8 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                     return true;
                 }
 
-                Player player = (Player) sender;
-                boolean newStatus = databaseManager.toggleOptOut(player.getUniqueId());
+                final Player player = (Player) sender;
+                final boolean newStatus = optOutManager.toggleOptOut(player.getUniqueId());
 
                 if (newStatus) {
                     sender.sendMessage(ChatColor.GREEN + "You have opted out of mob accuracy nerfs!");
@@ -356,10 +377,6 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         return false;
     }
 
-    private static double clamp(double val, double min, double max) {
-        return Math.max(min, Math.min(max, val));
-    }
-
     @EventHandler
     public void onBowShoot(EntityShootBowEvent event) {
         if (debug) {
@@ -367,8 +384,8 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         }
 
         // Get entity configuration
-        EntityType entityType = event.getEntity().getType();
-        EntityConfig config = entityConfigs.get(entityType);
+        final EntityType entityType = event.getEntity().getType();
+        final EntityConfig config = entityConfigs.get(entityType);
 
         // Only process entities that are configured and enabled
         if (config == null || !config.isEnabled()) {
@@ -377,12 +394,12 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
 
         // Check if the target player has opted out
         if (event.getEntity() instanceof Mob) {
-            Mob mob = (Mob) event.getEntity();
-            LivingEntity target = mob.getTarget();
+            final Mob mob = (Mob) event.getEntity();
+            final LivingEntity target = mob.getTarget();
 
             if (target instanceof Player) {
-                Player player = (Player) target;
-                if (databaseManager.isOptedOut(player.getUniqueId())) {
+                final Player player = (Player) target;
+                if (optOutManager.isOptedOut(player.getUniqueId())) {
                     if (debug) {
                         logger.info("Skipping nerf for " + player.getName() + " (opted out)");
                     }
@@ -391,18 +408,23 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
             }
         }
 
-        final Vector vec = event.getProjectile().getVelocity().clone();
-        final double originalSpeed = vec.length();
+        // Get projectile velocity and preserve original speed
+        final Vector velocity = event.getProjectile().getVelocity();
+        final double originalSpeed = velocity.length();
 
-        // Add random deviation to the direction using entity-specific accuracy
-        vec.add(Vector.getRandom().multiply(clamp(config.getAccuracy(), 0, 1)));
+        // Generate random deviation scaled by accuracy factor
+        // Note: accuracy is already clamped to [0.0, 1.0] in EntityConfig constructor
+        final Vector deviation = Vector.getRandom();
+        deviation.multiply(config.getAccuracy());
 
-        // Preserve the original arrow speed
-        vec.normalize().multiply(originalSpeed);
-        event.getProjectile().setVelocity(vec);
+        // Apply deviation and restore original speed
+        velocity.add(deviation);
+        velocity.normalize();
+        velocity.multiply(originalSpeed);
+        event.getProjectile().setVelocity(velocity);
 
         if (debug) {
-            logger.info("Projectile from '" + event.getEntity().getType() + "' launched with modified velocity '" + vec +
+            logger.info("Projectile from '" + event.getEntity().getType() + "' launched with modified velocity '" + velocity +
                 "' (accuracy: " + String.format("%.2f", config.getAccuracy()) + ")");
         }
     }

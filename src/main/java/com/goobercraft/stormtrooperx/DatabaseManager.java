@@ -23,10 +23,19 @@ public class DatabaseManager {
     /**
      * Creates a new database manager.
      *
-     * @param logger Logger instance
-     * @param dataFolder Plugin data folder
+     * @param logger Logger instance (must not be null)
+     * @param dataFolder Plugin data folder (must not be null)
+     * @throws IllegalArgumentException if any parameter is null
      */
     public DatabaseManager(Logger logger, File dataFolder) {
+        // Defensive: validate constructor parameters
+        if (logger == null) {
+            throw new IllegalArgumentException("logger cannot be null");
+        }
+        if (dataFolder == null) {
+            throw new IllegalArgumentException("dataFolder cannot be null");
+        }
+
         this.logger = logger;
         this.databaseFile = new File(dataFolder, "players");
     }
@@ -42,7 +51,7 @@ public class DatabaseManager {
             // Create connection with minimal security options for local embedded database:
             // - FILE_LOCK=SOCKET: Prevents concurrent access issues (not security, but data integrity)
             // - MODE=MySQL: MySQL compatibility mode for familiar syntax
-            String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + ";MODE=MySQL;FILE_LOCK=SOCKET";
+            final String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + ";MODE=MySQL;FILE_LOCK=SOCKET";
             connection = DriverManager.getConnection(url, "sa", "");
 
             // Create table if it doesn't exist
@@ -60,7 +69,7 @@ public class DatabaseManager {
      * Creates the necessary database tables.
      */
     private void createTables() throws SQLException {
-        String createTableSQL = "CREATE TABLE IF NOT EXISTS player_optouts (" +
+        final String createTableSQL = "CREATE TABLE IF NOT EXISTS player_optouts (" +
                 "uuid VARCHAR(36) PRIMARY KEY, " +
                 "opted_out BOOLEAN NOT NULL DEFAULT TRUE, " +
                 "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
@@ -102,7 +111,7 @@ public class DatabaseManager {
             return false;
         }
 
-        String query = "SELECT opted_out FROM player_optouts WHERE uuid = ?";
+        final String query = "SELECT opted_out FROM player_optouts WHERE uuid = ?";
 
         try (PreparedStatement statement = connection.prepareStatement(query)) {
             statement.setString(1, playerUUID.toString());
@@ -130,8 +139,7 @@ public class DatabaseManager {
             return;
         }
 
-        String upsertSQL = "MERGE INTO player_optouts (uuid, opted_out, updated_at) " +
-                "KEY(uuid) VALUES (?, ?, CURRENT_TIMESTAMP)";
+        final String upsertSQL = "MERGE INTO player_optouts (uuid, opted_out, updated_at) KEY(uuid) VALUES (?, ?, CURRENT_TIMESTAMP)";
 
         try (PreparedStatement statement = connection.prepareStatement(upsertSQL)) {
             statement.setString(1, playerUUID.toString());
@@ -153,8 +161,8 @@ public class DatabaseManager {
             return false;
         }
 
-        boolean currentStatus = isOptedOut(playerUUID);
-        boolean newStatus = !currentStatus;
+        final boolean currentStatus = isOptedOut(playerUUID);
+        final boolean newStatus = !currentStatus;
         setOptOut(playerUUID, newStatus);
         return newStatus;
     }

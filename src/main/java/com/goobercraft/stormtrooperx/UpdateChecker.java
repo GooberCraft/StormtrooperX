@@ -26,8 +26,17 @@ public class UpdateChecker {
      *
      * @param plugin The plugin instance
      * @param githubRepo The GitHub repository in format "owner/repo"
+     * @throws IllegalArgumentException if githubRepo is null, empty, or invalid format
      */
     public UpdateChecker(Plugin plugin, String githubRepo) {
+        // Defensive: validate constructor parameters
+        if (githubRepo == null || githubRepo.isEmpty()) {
+            throw new IllegalArgumentException("githubRepo cannot be null or empty");
+        }
+        if (!githubRepo.contains("/")) {
+            throw new IllegalArgumentException("githubRepo must be in format 'owner/repo', got: " + githubRepo);
+        }
+
         this.plugin = plugin;
         this.githubRepo = githubRepo;
     }
@@ -40,7 +49,7 @@ public class UpdateChecker {
     public void checkForUpdates(UpdateCallback callback) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                String currentVersion = plugin.getDescription().getVersion();
+                final String currentVersion = plugin.getDescription().getVersion();
                 latestVersion = fetchLatestVersion();
 
                 if (latestVersion == null) {
@@ -48,7 +57,7 @@ public class UpdateChecker {
                     return;
                 }
 
-                int comparison = compareVersions(currentVersion, latestVersion);
+                final int comparison = compareVersions(currentVersion, latestVersion);
 
                 // Run callback on main thread
                 Bukkit.getScheduler().runTask(plugin, () -> callback.onComplete(comparison, currentVersion, latestVersion));
@@ -67,7 +76,7 @@ public class UpdateChecker {
     private String fetchLatestVersion() {
         HttpURLConnection connection = null;
         try {
-            URL url = new URL("https://api.github.com/repos/" + githubRepo + "/releases/latest");
+            final URL url = new URL("https://api.github.com/repos/" + githubRepo + "/releases/latest");
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(5000);
@@ -75,10 +84,10 @@ public class UpdateChecker {
             connection.setRequestProperty("Accept", "application/vnd.github.v3+json");
             connection.setRequestProperty("User-Agent", "StormtrooperX-UpdateChecker");
 
-            int responseCode = connection.getResponseCode();
+            final int responseCode = connection.getResponseCode();
             if (responseCode == 200) {
                 // Limit response size to prevent memory exhaustion attacks
-                int contentLength = connection.getContentLength();
+                final int contentLength = connection.getContentLength();
                 if (contentLength > MAX_RESPONSE_SIZE_BYTES) {
                     plugin.getLogger().warning("Response size too large, possible security issue");
                     return null;
@@ -88,7 +97,7 @@ public class UpdateChecker {
 
                 // Use try-with-resources to ensure proper resource cleanup
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
-                    StringBuilder response = new StringBuilder();
+                    final StringBuilder response = new StringBuilder();
                     String line;
                     int totalChars = 0;
                     while ((line = reader.readLine()) != null) {
@@ -96,7 +105,7 @@ public class UpdateChecker {
                         // Runtime check to prevent memory exhaustion attacks
                         // Note: We use character count rather than byte count for simplicity.
                         // In Java, chars are UTF-16 (2 bytes each), so actual memory usage may be 2x this limit,
-                        // but the limit is generous (1MB of chars = ~2MB memory) and sufficient for legitimate 
+                        // but the limit is generous (1MB of chars = ~2MB memory) and sufficient for legitimate
                         // GitHub API responses (~10KB typical). This is a security control, not exact accounting.
                         if (totalChars > MAX_RESPONSE_SIZE_BYTES) {
                             plugin.getLogger().warning("Response too large, aborting");
@@ -106,8 +115,8 @@ public class UpdateChecker {
                     }
 
                     // Parse JSON response to get tag_name
-                    String json = response.toString();
-                    String tagName = extractJsonValue(json, "tag_name");
+                    final String json = response.toString();
+                    final String tagName = extractJsonValue(json, "tag_name");
 
                     // Remove 'v' prefix if present
                     if (tagName != null && tagName.startsWith("v")) {
@@ -135,13 +144,13 @@ public class UpdateChecker {
      * @return The value, or null if not found
      */
     private String extractJsonValue(String json, String key) {
-        String searchKey = "\"" + key + "\":\"";
+        final String searchKey = "\"" + key + "\":\"";
         int startIndex = json.indexOf(searchKey);
         if (startIndex == -1) {
             return null;
         }
         startIndex += searchKey.length();
-        int endIndex = json.indexOf("\"", startIndex);
+        final int endIndex = json.indexOf("\"", startIndex);
         if (endIndex == -1) {
             return null;
         }
@@ -156,13 +165,13 @@ public class UpdateChecker {
      * @return Negative if current < latest, 0 if equal, positive if current > latest
      */
     private int compareVersions(String current, String latest) {
-        String[] currentParts = current.split("\\.");
-        String[] latestParts = latest.split("\\.");
+        final String[] currentParts = current.split("\\.");
+        final String[] latestParts = latest.split("\\.");
 
-        int length = Math.max(currentParts.length, latestParts.length);
+        final int length = Math.max(currentParts.length, latestParts.length);
         for (int i = 0; i < length; i++) {
-            int currentPart = i < currentParts.length ? parseVersionPart(currentParts[i]) : 0;
-            int latestPart = i < latestParts.length ? parseVersionPart(latestParts[i]) : 0;
+            final int currentPart = i < currentParts.length ? parseVersionPart(currentParts[i]) : 0;
+            final int latestPart = i < latestParts.length ? parseVersionPart(latestParts[i]) : 0;
 
             if (currentPart < latestPart) {
                 return -1;
@@ -181,7 +190,7 @@ public class UpdateChecker {
      */
     private int parseVersionPart(String part) {
         // Remove any non-numeric suffix (e.g., "1.0-SNAPSHOT" -> "1.0")
-        StringBuilder numeric = new StringBuilder();
+        final StringBuilder numeric = new StringBuilder();
         for (char c : part.toCharArray()) {
             if (Character.isDigit(c)) {
                 numeric.append(c);

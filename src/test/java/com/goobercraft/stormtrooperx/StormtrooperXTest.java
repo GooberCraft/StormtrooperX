@@ -14,85 +14,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class StormtrooperXTest {
 
     @Test
-    void testClamp_withinRange() throws Exception {
-        Method method = StormtrooperX.class.getDeclaredMethod("clamp", double.class, double.class, double.class);
-        method.setAccessible(true);
-
-        double result = (double) method.invoke(null, 5.0, 0.0, 10.0);
-        assertEquals(5.0, result, 0.001);
-    }
-
-    @Test
-    void testClamp_belowMin() throws Exception {
-        Method method = StormtrooperX.class.getDeclaredMethod("clamp", double.class, double.class, double.class);
-        method.setAccessible(true);
-
-        double result = (double) method.invoke(null, -5.0, 0.0, 10.0);
-        assertEquals(0.0, result, 0.001);
-    }
-
-    @Test
-    void testClamp_aboveMax() throws Exception {
-        Method method = StormtrooperX.class.getDeclaredMethod("clamp", double.class, double.class, double.class);
-        method.setAccessible(true);
-
-        double result = (double) method.invoke(null, 15.0, 0.0, 10.0);
-        assertEquals(10.0, result, 0.001);
-    }
-
-    @Test
-    void testClamp_atMin() throws Exception {
-        Method method = StormtrooperX.class.getDeclaredMethod("clamp", double.class, double.class, double.class);
-        method.setAccessible(true);
-
-        double result = (double) method.invoke(null, 0.0, 0.0, 10.0);
-        assertEquals(0.0, result, 0.001);
-    }
-
-    @Test
-    void testClamp_atMax() throws Exception {
-        Method method = StormtrooperX.class.getDeclaredMethod("clamp", double.class, double.class, double.class);
-        method.setAccessible(true);
-
-        double result = (double) method.invoke(null, 10.0, 0.0, 10.0);
-        assertEquals(10.0, result, 0.001);
-    }
-
-    @Test
-    void testClamp_negativeRange() throws Exception {
-        Method method = StormtrooperX.class.getDeclaredMethod("clamp", double.class, double.class, double.class);
-        method.setAccessible(true);
-
-        double result = (double) method.invoke(null, -5.0, -10.0, -1.0);
-        assertEquals(-5.0, result, 0.001);
-    }
-
-    @Test
-    void testClamp_fractionalValues() throws Exception {
-        Method method = StormtrooperX.class.getDeclaredMethod("clamp", double.class, double.class, double.class);
-        method.setAccessible(true);
-
-        double result = (double) method.invoke(null, 0.5, 0.0, 1.0);
-        assertEquals(0.5, result, 0.001);
-    }
-
-    @Test
-    void testClamp_zeroToOneRange() throws Exception {
-        Method method = StormtrooperX.class.getDeclaredMethod("clamp", double.class, double.class, double.class);
-        method.setAccessible(true);
-
-        // Test common use case for accuracy values
-        double result1 = (double) method.invoke(null, 0.7, 0.0, 1.0);
-        assertEquals(0.7, result1, 0.001);
-
-        double result2 = (double) method.invoke(null, 1.5, 0.0, 1.0);
-        assertEquals(1.0, result2, 0.001);
-
-        double result3 = (double) method.invoke(null, -0.5, 0.0, 1.0);
-        assertEquals(0.0, result3, 0.001);
-    }
-
-    @Test
     void testCapitalize_normalWord() throws Exception {
         Method method = StormtrooperX.class.getDeclaredMethod("capitalize", String.class);
         method.setAccessible(true);
@@ -228,5 +149,59 @@ class StormtrooperXTest {
         Object config3 = constructor.newInstance(true, 0.5);
         double accuracy3 = (double) getAccuracyMethod.invoke(config3);
         assertEquals(0.5, accuracy3, 0.001);
+    }
+
+    @Test
+    void testEntityConfig_clampAccuracyAboveMax() throws Exception {
+        // Get the inner class
+        Class<?> entityConfigClass = null;
+        for (Class<?> innerClass : StormtrooperX.class.getDeclaredClasses()) {
+            if (innerClass.getSimpleName().equals("EntityConfig")) {
+                entityConfigClass = innerClass;
+                break;
+            }
+        }
+        assertNotNull(entityConfigClass, "EntityConfig inner class should exist");
+
+        Constructor<?> constructor = entityConfigClass.getDeclaredConstructor(boolean.class, double.class);
+        constructor.setAccessible(true);
+        Method getAccuracyMethod = entityConfigClass.getDeclaredMethod("getAccuracy");
+        getAccuracyMethod.setAccessible(true);
+
+        // Test accuracy > 1.0 should be clamped to 1.0
+        Object config1 = constructor.newInstance(true, 1.5);
+        double accuracy1 = (double) getAccuracyMethod.invoke(config1);
+        assertEquals(1.0, accuracy1, 0.001, "Accuracy 1.5 should be clamped to 1.0");
+
+        Object config2 = constructor.newInstance(true, 999.9);
+        double accuracy2 = (double) getAccuracyMethod.invoke(config2);
+        assertEquals(1.0, accuracy2, 0.001, "Accuracy 999.9 should be clamped to 1.0");
+    }
+
+    @Test
+    void testEntityConfig_clampAccuracyBelowMin() throws Exception {
+        // Get the inner class
+        Class<?> entityConfigClass = null;
+        for (Class<?> innerClass : StormtrooperX.class.getDeclaredClasses()) {
+            if (innerClass.getSimpleName().equals("EntityConfig")) {
+                entityConfigClass = innerClass;
+                break;
+            }
+        }
+        assertNotNull(entityConfigClass, "EntityConfig inner class should exist");
+
+        Constructor<?> constructor = entityConfigClass.getDeclaredConstructor(boolean.class, double.class);
+        constructor.setAccessible(true);
+        Method getAccuracyMethod = entityConfigClass.getDeclaredMethod("getAccuracy");
+        getAccuracyMethod.setAccessible(true);
+
+        // Test accuracy < 0.0 should be clamped to 0.0
+        Object config1 = constructor.newInstance(true, -0.5);
+        double accuracy1 = (double) getAccuracyMethod.invoke(config1);
+        assertEquals(0.0, accuracy1, 0.001, "Accuracy -0.5 should be clamped to 0.0");
+
+        Object config2 = constructor.newInstance(true, -999.9);
+        double accuracy2 = (double) getAccuracyMethod.invoke(config2);
+        assertEquals(0.0, accuracy2, 0.001, "Accuracy -999.9 should be clamped to 0.0");
     }
 }
