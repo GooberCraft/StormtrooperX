@@ -6,21 +6,75 @@ We actively provide security updates for the following versions:
 
 | Version | Supported          | Minecraft Version | Java Version | Notes |
 | ------- | ------------------ | ----------------- | ------------ | ----- |
-| 1.5.x   | :white_check_mark: | 1.13 - 1.21.x     | 11+          | Current stable release |
-| 1.4.x   | :white_check_mark: | 1.13 - 1.21.x     | 8+           | Security fixes only |
+| 1.6.x   | :white_check_mark: | 1.13 - 1.21.x     | 11+          | Current stable release |
+| 1.5.x   | :white_check_mark: | 1.13 - 1.21.x     | 11+          | Security fixes only |
+| 1.4.x   | :x:                | 1.13 - 1.21.x     | 8+           | No longer supported |
 | 1.3.x   | :x:                | 1.13 - 1.21.x     | 8+           | No longer supported |
-| 1.2.x   | :x:                | 1.13 - 1.21.x     | 8+           | No longer supported |
-| < 1.2   | :x:                | N/A               | N/A          | No longer supported |
+| < 1.3   | :x:                | N/A               | N/A          | No longer supported |
 
 **Note**: While the plugin is compatible with Minecraft 1.13+, we recommend using the latest stable Minecraft version and keeping the plugin updated.
+
+## Verifying Release Authenticity
+
+Starting with **v1.6.1**, all releases include cryptographic build attestations to verify authenticity and protect against supply chain attacks.
+
+### Verify a Release
+
+Install [GitHub CLI](https://cli.github.com/) and verify the downloaded JAR:
+
+```bash
+gh attestation verify StormtrooperX-1.6.1.jar --repo GooberCraft/StormtrooperX
+```
+
+Successful verification confirms:
+- ✅ Built from the official GooberCraft/StormtrooperX repository
+- ✅ Built using official GitHub Actions workflows
+- ✅ Not modified since it was built
+
+For detailed verification instructions, see the [Verifying Releases Wiki](https://github.com/GooberCraft/StormtrooperX/wiki/Verifying-Releases).
+
+**Security Recommendation**: Always verify releases downloaded from third-party sources or mirrors.
 
 ## Security Considerations
 
 ### Data Storage
-StormtrooperX stores player opt-out preferences in a local H2 database:
-- Database location: `plugins/StormtrooperX/playerdata.mv.db`
+StormtrooperX stores player opt-out preferences in a database:
+
+**H2 (Embedded - Default)**:
+- Database location: `plugins/StormtrooperX/players.mv.db`
 - Data stored: Player UUIDs and opt-out status (boolean)
-- No personally identifiable information (PII) is stored beyond UUIDs
+- No network exposure (local file only)
+- Automatic backups recommended
+
+**MySQL (Optional)**:
+- Connection: Configured via `config.yml`
+- Data stored: Player UUIDs and opt-out status (boolean)
+- Uses HikariCP connection pooling for security and performance
+- Supports SSL/TLS encryption (configure via JDBC properties)
+- Credentials stored in `config.yml` (protect file permissions)
+
+**Privacy**: No personally identifiable information (PII) is stored beyond UUIDs
+
+### Build Security & Supply Chain
+
+**Build Attestation** (v1.6.1+):
+- All releases are built via GitHub Actions in a secure, isolated environment
+- Cryptographic attestations prove build provenance using Sigstore
+- Attestations include: commit SHA, workflow, build environment, and timestamp
+- Stored in Rekor transparency log for public verification
+- Verifiable via GitHub CLI: `gh attestation verify`
+
+**Dependencies**:
+- All dependencies are shaded (relocated) to prevent conflicts
+- Regular dependency updates via Dependabot
+- Security scanning via GitHub CodeQL and Dependabot alerts
+- Dependency versions locked in `pom.xml`
+
+**Build Process**:
+- Automated builds on every commit (no manual builds)
+- 106 automated tests run before release
+- Code coverage monitoring via JaCoCo
+- Multi-version Java testing (11, 17, 21)
 
 ### External Communications
 The plugin makes outbound HTTPS requests to:
@@ -142,9 +196,20 @@ When a security vulnerability is confirmed:
 - Use proper file permissions for the `plugins/` directory
 
 ### Database Security
+
+**H2 (Embedded)**:
 - The H2 database file is stored locally and not exposed externally
-- Ensure proper file system permissions on `plugins/StormtrooperX/playerdata.mv.db`
+- Ensure proper file system permissions on `plugins/StormtrooperX/players.mv.db`
 - Include the database file in your backup strategy
+- Database is automatically created with secure permissions
+
+**MySQL (Optional)**:
+- Use strong passwords for MySQL database users
+- Restrict MySQL user permissions to only required operations (SELECT, INSERT, UPDATE)
+- Enable SSL/TLS for MySQL connections in production
+- Keep MySQL server updated with security patches
+- Use firewall rules to restrict MySQL access to trusted hosts only
+- Store credentials securely in `config.yml` with restricted file permissions (chmod 600)
 
 ### Network Security
 - StormtrooperX does not open any ports
@@ -156,11 +221,13 @@ When a security vulnerability is confirmed:
 ### In Scope
 - Authentication/authorization bypasses
 - Remote code execution vulnerabilities
-- SQL injection or database vulnerabilities
+- SQL injection or database vulnerabilities (H2 or MySQL)
 - Privilege escalation
 - Information disclosure of sensitive data
 - Denial of service vulnerabilities
 - Configuration issues leading to security problems
+- Supply chain security issues (build process, dependencies)
+- Issues with build attestation or artifact verification
 
 ### Out of Scope
 - Issues in Minecraft, Spigot, Paper, or Java itself
