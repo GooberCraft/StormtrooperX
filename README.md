@@ -18,10 +18,11 @@ A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs lik
 - Per-entity configuration (enable/disable specific mobs)
 - Adjustable accuracy modifier (0.0 = perfect aim, 1.0 = complete chaos)
 - **Player opt-out system** - individual players can choose normal mob accuracy
+- **Database options** - H2 embedded (default) or MySQL with HikariCP connection pooling
 - In-game reload command
 - Automatic update checker (checks GitHub releases on startup)
 - Anonymous usage statistics via [bStats](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
-- Persistent storage using H2 database
+- **Build attestation** - cryptographic verification of release authenticity (v1.6.1+)
 - Debug mode for troubleshooting
 - Lightweight with minimal performance impact
 
@@ -54,7 +55,7 @@ All releases starting from **v1.6.1** include cryptographic build attestations t
 Install [GitHub CLI](https://cli.github.com/) and verify the downloaded JAR:
 
 ```bash
-gh attestation verify StormtrooperX-1.6.0.jar --repo GooberCraft/StormtrooperX
+gh attestation verify StormtrooperX-1.6.1.jar --repo GooberCraft/StormtrooperX
 ```
 
 A successful verification confirms:
@@ -74,7 +75,30 @@ The plugin generates a `config.yml` file in `plugins/StormtrooperX/`:
 
 ```yaml
 # StormtrooperX Configuration
-config-version: 2
+config-version: 3
+
+# Database Configuration
+database:
+  # Database type: 'h2' (embedded, default) or 'mysql'
+  type: h2
+
+  # MySQL Configuration (only used if type is 'mysql')
+  mysql:
+    host: localhost
+    port: 3306
+    database: stormtrooperx
+    username: root
+    password: ""
+    pool:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+    # Optional: JDBC connection properties
+    # properties:
+    #   useSSL: "true"
+    #   serverTimezone: "UTC"
 
 # Per-Entity Configuration
 # Each entity can have individual accuracy settings
@@ -124,6 +148,16 @@ debug: false
 - **pillager**: Pillager mobs (1.14+ only). Default: enabled, accuracy 0.7
 - **piglin**: Piglin mobs (1.16+ only). Default: enabled, accuracy 0.7
 
+**Database Settings:**
+- **database.type**: Database type - `h2` (embedded, default) or `mysql`
+- **database.mysql.host**: MySQL server hostname. Default: localhost
+- **database.mysql.port**: MySQL server port. Default: 3306
+- **database.mysql.database**: MySQL database name. Default: stormtrooperx
+- **database.mysql.username**: MySQL username. Default: root
+- **database.mysql.password**: MySQL password. Default: "" (empty)
+- **database.mysql.pool**: HikariCP connection pool settings
+- **database.mysql.properties**: Optional JDBC connection properties (SSL, timezone, etc.)
+
 **Other Settings:**
 - **config-version**: Config format version (DO NOT MODIFY - used for automatic migrations)
 - **check-for-updates**: Automatically check for updates on startup. Default: true
@@ -131,11 +165,17 @@ debug: false
 
 ### Config Migration
 
-**Upgrading from v1.3.0 or earlier:**
-The plugin automatically migrates old config formats to the new per-entity format. Your settings will be preserved:
+The plugin automatically migrates old config formats. Your settings will be preserved:
+
+**Upgrading from v1.5.x or earlier (to v3):**
+- Database configuration section added (defaults to H2)
+- All existing settings preserved
+- Migration happens automatically on first load
+
+**Upgrading from v1.3.0 or earlier (to v2):**
 - Old global `accuracy` value → applied to all entities
 - Old entity enable/disable settings → preserved
-- Migration happens automatically on first load
+- Per-entity configuration format introduced
 
 ## Commands
 
