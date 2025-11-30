@@ -1,7 +1,44 @@
 
 # StormtrooperX Configuration
 # Config version - DO NOT MODIFY (used for automatic migrations)
-config-version: 2
+config-version: 3
+
+# Database Configuration
+# type: 'h2' (embedded, default) or 'mysql' (requires external server)
+database:
+  type: h2
+
+  # MySQL Configuration (only used if type: mysql)
+  mysql:
+    host: localhost
+    port: 3306
+    database: stormtrooperx
+    username: root
+    password: ''
+
+    # Connection pool settings (HikariCP)
+    pool:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+    # Custom JDBC connection properties (optional)
+    # Add any MySQL-specific parameters here
+    # Common examples:
+    #   useSSL: true/false
+    #   requireSSL: true/false
+    #   verifyServerCertificate: true/false
+    #   serverTimezone: UTC
+    #   characterEncoding: utf8
+    properties: {}
+    # Example with SSL enabled:
+    # properties:
+    #   useSSL: 'true'
+    #   requireSSL: 'true'
+    #   verifyServerCertificate: 'false'
+    #   serverTimezone: 'UTC'
 
 # Per-Entity Configuration
 # Each entity can have individual accuracy settings

@@ -69,15 +69,16 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         this.saveDefaultConfig();
         this.getServer().getPluginManager().registerEvents(this, this);
 
-        // Initialize database
-        databaseManager = new DatabaseManager(logger, getDataFolder());
+        loadConfiguration();
+
+        // Initialize database with configuration
+        final String databaseType = getConfig().getString("database.type", "h2");
+        databaseManager = new DatabaseManager(logger, getDataFolder(), databaseType, getConfig().getConfigurationSection("database.mysql"));
         databaseManager.initialize();
 
         // Initialize opt-out manager with async support and server max players for cache sizing
         optOutManager = new OptOutManager(logger, databaseManager, this, getServer().getMaxPlayers());
         this.getServer().getPluginManager().registerEvents(optOutManager, this);
-
-        loadConfiguration();
 
         this.logger.info("========================================");
         this.logger.info("  StormtrooperX v" + getDescription().getVersion());
@@ -135,10 +136,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         entityConfigs.clear();
 
         // Check config version and migrate if needed
-        final int configVersion = getConfig().getInt("config-version", 1);
-        if (configVersion < 2) {
-            this.logger.info("Detected old config format (v1). Migrating to v2...");
-            migrateConfigToV2();
+        final int configVersion = getConfig().getInt("config-version", 2);
+        if (configVersion == 2) {
+            this.logger.info("Detected config format v2. Migrating to v3...");
+            migrateConfigToV3();
             reloadConfig(); // Reload after migration
         }
 
@@ -153,50 +154,33 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     }
 
     /**
-     * Migrates configuration from v1 (global accuracy) to v2 (per-entity accuracy).
+     * Migrates configuration from v2 (per-entity accuracy) to v3 (database configuration added).
      */
-    private void migrateConfigToV2() {
-        // Read old format values
-        final double globalAccuracy = getConfig().getDouble("accuracy", 0.7);
-        final boolean skeletonEnabled = getConfig().getBoolean("skeleton", true);
-        final boolean strayEnabled = getConfig().getBoolean("stray", true);
-        final boolean boggedEnabled = getConfig().getBoolean("bogged", true);
-        final boolean pillagerEnabled = getConfig().getBoolean("pillager", true);
-        final boolean piglinEnabled = getConfig().getBoolean("piglin", true);
-        final boolean checkUpdates = getConfig().getBoolean("check-for-updates", true);
-        final boolean debugMode = getConfig().getBoolean("debug", false);
+    private void migrateConfigToV3() {
+        // V3 adds database configuration section
+        // All existing settings are preserved, we just add new database config
 
-        // Clear old config
-        getConfig().set("accuracy", null);
-        getConfig().set("skeleton", null);
-        getConfig().set("stray", null);
-        getConfig().set("bogged", null);
-        getConfig().set("pillager", null);
-        getConfig().set("piglin", null);
+        // Set new version
+        getConfig().set("config-version", 3);
 
-        // Set new format
-        getConfig().set("config-version", 2);
-
-        // Migrate entities with per-entity accuracy
-        getConfig().set("entities.skeleton.enabled", skeletonEnabled);
-        getConfig().set("entities.skeleton.accuracy", globalAccuracy);
-        getConfig().set("entities.stray.enabled", strayEnabled);
-        getConfig().set("entities.stray.accuracy", globalAccuracy);
-        getConfig().set("entities.bogged.enabled", boggedEnabled);
-        getConfig().set("entities.bogged.accuracy", globalAccuracy);
-        getConfig().set("entities.pillager.enabled", pillagerEnabled);
-        getConfig().set("entities.pillager.accuracy", globalAccuracy);
-        getConfig().set("entities.piglin.enabled", piglinEnabled);
-        getConfig().set("entities.piglin.accuracy", globalAccuracy);
-
-        // Preserve other settings
-        getConfig().set("check-for-updates", checkUpdates);
-        getConfig().set("debug", debugMode);
+        // Add default database configuration (H2 embedded)
+        getConfig().set("database.type", "h2");
+        getConfig().set("database.mysql.host", "localhost");
+        getConfig().set("database.mysql.port", 3306);
+        getConfig().set("database.mysql.database", "stormtrooperx");
+        getConfig().set("database.mysql.username", "root");
+        getConfig().set("database.mysql.password", "");
+        getConfig().set("database.mysql.pool.maximum-pool-size", 10);
+        getConfig().set("database.mysql.pool.minimum-idle", 2);
+        getConfig().set("database.mysql.pool.connection-timeout", 30000);
+        getConfig().set("database.mysql.pool.idle-timeout", 600000);
+        getConfig().set("database.mysql.pool.max-lifetime", 1800000);
+        // Properties section will be empty by default
 
         // Save migrated config
         saveConfig();
-        this.logger.info("Config migration complete! All entities now use accuracy: " + globalAccuracy);
-        this.logger.info("You can now configure individual accuracy per entity in config.yml");
+        this.logger.info("Config migration to v3 complete! Database configuration added (using H2 by default)");
+        this.logger.info("You can configure MySQL database in config.yml if needed");
     }
 
     /**

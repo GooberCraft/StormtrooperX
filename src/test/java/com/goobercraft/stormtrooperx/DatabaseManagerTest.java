@@ -25,7 +25,7 @@ class DatabaseManagerTest {
     @BeforeEach
     void setUp() {
         logger = Logger.getLogger("TestLogger");
-        databaseManager = new DatabaseManager(logger, tempDir);
+        databaseManager = new DatabaseManager(logger, tempDir, "h2", null);
         databaseManager.initialize();
     }
 
@@ -178,7 +178,7 @@ class DatabaseManagerTest {
         databaseManager.close();
 
         // Create a new instance pointing to the same database file
-        DatabaseManager newManager = new DatabaseManager(logger, tempDir);
+        DatabaseManager newManager = new DatabaseManager(logger, tempDir, "h2", null);
         newManager.initialize();
 
         // Verify the data persisted
