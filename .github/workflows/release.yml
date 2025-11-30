@@ -10,6 +10,8 @@ jobs:
 
     permissions:
       contents: write
+      id-token: write  # Required for attestation signing
+      attestations: write  # Required for publishing attestations
 
     steps:
     - name: Checkout code
@@ -30,6 +32,12 @@ jobs:
     - name: Get version from tag
       id: get_version
       run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    # Generate build provenance attestation
+    - name: Attest build provenance
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-path: 'target/StormtrooperX-*.jar'
 
     # Use modern action instead of deprecated upload-release-asset
     - name: Upload release asset

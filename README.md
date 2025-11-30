@@ -45,6 +45,29 @@ A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs lik
 3. Restart your server or use a plugin manager to load it
 4. Configure the plugin in `plugins/StormtrooperX/config.yml`
 
+## Verifying Releases
+
+All releases starting from **v1.6.1** include cryptographic build attestations to verify authenticity and protect against supply chain attacks.
+
+### Quick Verification
+
+Install [GitHub CLI](https://cli.github.com/) and verify the downloaded JAR:
+
+```bash
+gh attestation verify StormtrooperX-1.6.0.jar --repo GooberCraft/StormtrooperX
+```
+
+A successful verification confirms:
+- ✅ Built from the official GooberCraft/StormtrooperX repository
+- ✅ Built using official GitHub Actions workflows
+- ✅ Not modified since it was built
+
+### Learn More
+
+For detailed verification instructions, automated verification scripts, and CI/CD integration examples, see the **[Verifying Releases Wiki](../../wiki/Verifying-Releases)**.
+
+**Security Tip**: Always verify artifacts downloaded from third-party sources or mirrors.
+
 ## Configuration
 
 The plugin generates a `config.yml` file in `plugins/StormtrooperX/`:
