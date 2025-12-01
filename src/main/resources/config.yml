@@ -24,21 +24,32 @@ database:
       idle-timeout: 600000
       max-lifetime: 1800000
 
-    # Custom JDBC connection properties (optional)
-    # Add any MySQL-specific parameters here
-    # Common examples:
-    #   useSSL: true/false
-    #   requireSSL: true/false
-    #   verifyServerCertificate: true/false
-    #   serverTimezone: UTC
-    #   characterEncoding: utf8
+    # JDBC connection properties (optional)
+    # SECURITY: Enable SSL for production MySQL connections, especially over networks
+    #
+    # SSL Configuration (recommended for production):
+    #   useSSL: 'true'              - Enable SSL encryption
+    #   requireSSL: 'true'          - Require SSL (fail if unavailable)
+    #   verifyServerCertificate: 'true'  - Verify server certificate (recommended)
+    #
+    # Note: Set verifyServerCertificate to 'false' only for self-signed certs
+    #       or development environments. Use 'true' in production with proper certs.
+    #
+    # Other common properties:
+    #   serverTimezone: 'UTC'       - Set server timezone
+    #   characterEncoding: 'utf8mb4' - Character encoding
+    #
     properties: {}
-    # Example with SSL enabled:
-    # properties:
-    #   useSSL: 'true'
-    #   requireSSL: 'true'
-    #   verifyServerCertificate: 'false'
-    #   serverTimezone: 'UTC'
+    #
+    # Example - Development (localhost, no SSL):
+    #   properties: {}
+    #
+    # Example - Production (SSL enabled):
+    #   properties:
+    #     useSSL: 'true'
+    #     requireSSL: 'true'
+    #     verifyServerCertificate: 'true'
+    #     serverTimezone: 'UTC'
 
 # Per-Entity Configuration
 # Each entity can have individual accuracy settings
