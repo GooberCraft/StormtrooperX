@@ -17,12 +17,13 @@ database:
     password: ''
 
     # Connection pool settings (HikariCP)
+    # Invalid values will log a warning and use defaults
     pool:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
+      maximum-pool-size: 10      # Valid: 1-100
+      minimum-idle: 2            # Valid: 0 to maximum-pool-size
+      connection-timeout: 30000  # Valid: 250+ ms
+      idle-timeout: 600000       # Valid: 10000+ ms (or 0 = disabled)
+      max-lifetime: 1800000      # Valid: 30000+ ms (or 0 = disabled)
 
     # JDBC connection properties (optional)
     # SECURITY: Enable SSL for production MySQL connections, especially over networks
