@@ -148,7 +148,7 @@ public class DatabaseManager {
      * @param defaultValue Default value to use if invalid
      * @return Valid pool size value
      */
-    private int validatePoolSize(int value, String name, int min, int max, int defaultValue) {
+    int validatePoolSize(int value, String name, int min, int max, int defaultValue) {
         if (value < min || value > max) {
             logger.warning(String.format(
                 "Invalid MySQL pool config '%s': %d (valid range: %d-%d). Using default: %d",
@@ -167,7 +167,7 @@ public class DatabaseManager {
      * @param defaultValue Default value to use if invalid
      * @return Valid timeout value
      */
-    private long validateTimeout(long value, String name, long min, long defaultValue) {
+    long validateTimeout(long value, String name, long min, long defaultValue) {
         if (value < min && value != 0) {
             logger.warning(String.format(
                 "Invalid MySQL pool config '%s': %d ms (minimum: %d ms or 0 to disable). Using default: %d ms",
