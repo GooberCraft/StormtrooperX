@@ -139,6 +139,45 @@ public class DatabaseManager {
     }
 
     /**
+     * Validates a pool size configuration value.
+     *
+     * @param value The configured value
+     * @param name The configuration key name (for logging)
+     * @param min Minimum allowed value
+     * @param max Maximum allowed value
+     * @param defaultValue Default value to use if invalid
+     * @return Valid pool size value
+     */
+    private int validatePoolSize(int value, String name, int min, int max, int defaultValue) {
+        if (value < min || value > max) {
+            logger.warning(String.format(
+                "Invalid MySQL pool config '%s': %d (valid range: %d-%d). Using default: %d",
+                name, value, min, max, defaultValue));
+            return defaultValue;
+        }
+        return value;
+    }
+
+    /**
+     * Validates a timeout configuration value.
+     *
+     * @param value The configured value in milliseconds
+     * @param name The configuration key name (for logging)
+     * @param min Minimum allowed value (HikariCP requirement)
+     * @param defaultValue Default value to use if invalid
+     * @return Valid timeout value
+     */
+    private long validateTimeout(long value, String name, long min, long defaultValue) {
+        if (value < min && value != 0) {
+            logger.warning(String.format(
+                "Invalid MySQL pool config '%s': %d ms (minimum: %d ms or 0 to disable). Using default: %d ms",
+                name, value, min, defaultValue));
+            return defaultValue;
+        }
+        return value;
+    }
+
+    /**
      * Initializes MySQL database connection with HikariCP pooling.
      */
     private void initializeMySQL() throws SQLException {
@@ -175,14 +214,23 @@ public class DatabaseManager {
         config.setUsername(username);
         config.setPassword(password);
 
-        // Pool configuration
+        // Pool configuration with validation
         final ConfigurationSection poolConfig = mysqlConfig.getConfigurationSection("pool");
         if (poolConfig != null) {
-            config.setMaximumPoolSize(poolConfig.getInt("maximum-pool-size", 10));
-            config.setMinimumIdle(poolConfig.getInt("minimum-idle", 2));
-            config.setConnectionTimeout(poolConfig.getLong("connection-timeout", 30000));
-            config.setIdleTimeout(poolConfig.getLong("idle-timeout", 600000));
-            config.setMaxLifetime(poolConfig.getLong("max-lifetime", 1800000));
+            final int maxPoolSize = validatePoolSize(
+                poolConfig.getInt("maximum-pool-size", 10), "maximum-pool-size", 1, 100, 10);
+            config.setMaximumPoolSize(maxPoolSize);
+
+            final int minIdle = validatePoolSize(
+                poolConfig.getInt("minimum-idle", 2), "minimum-idle", 0, maxPoolSize, 2);
+            config.setMinimumIdle(minIdle);
+
+            config.setConnectionTimeout(validateTimeout(
+                poolConfig.getLong("connection-timeout", 30000), "connection-timeout", 250, 30000));
+            config.setIdleTimeout(validateTimeout(
+                poolConfig.getLong("idle-timeout", 600000), "idle-timeout", 10000, 600000));
+            config.setMaxLifetime(validateTimeout(
+                poolConfig.getLong("max-lifetime", 1800000), "max-lifetime", 30000, 1800000));
         }
 
         // Connection pool properties

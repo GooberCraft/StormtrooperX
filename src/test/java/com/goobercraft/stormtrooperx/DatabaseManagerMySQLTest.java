@@ -419,4 +419,135 @@ class DatabaseManagerMySQLTest {
         DatabaseManager manager2 = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
         assertNotNull(manager2);
     }
+
+    // ===========================================
+    // Pool Configuration Validation Tests
+    // ===========================================
+
+    @Test
+    void testPoolValidation_invalidMaxPoolSizeUsesDefault() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        ConfigurationSection poolConfig = mock(ConfigurationSection.class);
+
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(poolConfig);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        // Invalid: negative pool size
+        when(poolConfig.getInt("maximum-pool-size", 10)).thenReturn(-5);
+        when(poolConfig.getInt("minimum-idle", 2)).thenReturn(2);
+        when(poolConfig.getLong("connection-timeout", 30000)).thenReturn(30000L);
+        when(poolConfig.getLong("idle-timeout", 600000)).thenReturn(600000L);
+        when(poolConfig.getLong("max-lifetime", 1800000)).thenReturn(1800000L);
+
+        // Should not throw - invalid values use defaults
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+        assertNotNull(manager);
+    }
+
+    @Test
+    void testPoolValidation_invalidMinIdleUsesDefault() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        ConfigurationSection poolConfig = mock(ConfigurationSection.class);
+
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(poolConfig);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        // Invalid: minimum-idle greater than maximum-pool-size
+        when(poolConfig.getInt("maximum-pool-size", 10)).thenReturn(5);
+        when(poolConfig.getInt("minimum-idle", 2)).thenReturn(100);
+        when(poolConfig.getLong("connection-timeout", 30000)).thenReturn(30000L);
+        when(poolConfig.getLong("idle-timeout", 600000)).thenReturn(600000L);
+        when(poolConfig.getLong("max-lifetime", 1800000)).thenReturn(1800000L);
+
+        // Should not throw - invalid values use defaults
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+        assertNotNull(manager);
+    }
+
+    @Test
+    void testPoolValidation_invalidTimeoutUsesDefault() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        ConfigurationSection poolConfig = mock(ConfigurationSection.class);
+
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(poolConfig);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        when(poolConfig.getInt("maximum-pool-size", 10)).thenReturn(10);
+        when(poolConfig.getInt("minimum-idle", 2)).thenReturn(2);
+        // Invalid: connection-timeout below minimum (250ms)
+        when(poolConfig.getLong("connection-timeout", 30000)).thenReturn(100L);
+        // Invalid: idle-timeout below minimum (10000ms)
+        when(poolConfig.getLong("idle-timeout", 600000)).thenReturn(5000L);
+        // Invalid: max-lifetime below minimum (30000ms)
+        when(poolConfig.getLong("max-lifetime", 1800000)).thenReturn(10000L);
+
+        // Should not throw - invalid values use defaults
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+        assertNotNull(manager);
+    }
+
+    @Test
+    void testPoolValidation_zeroTimeoutIsValid() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        ConfigurationSection poolConfig = mock(ConfigurationSection.class);
+
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(poolConfig);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        when(poolConfig.getInt("maximum-pool-size", 10)).thenReturn(10);
+        when(poolConfig.getInt("minimum-idle", 2)).thenReturn(2);
+        when(poolConfig.getLong("connection-timeout", 30000)).thenReturn(30000L);
+        // Zero is valid (disables the timeout)
+        when(poolConfig.getLong("idle-timeout", 600000)).thenReturn(0L);
+        when(poolConfig.getLong("max-lifetime", 1800000)).thenReturn(0L);
+
+        // Should not throw - zero is valid for disabling timeouts
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+        assertNotNull(manager);
+    }
+
+    @Test
+    void testPoolValidation_excessiveMaxPoolSizeUsesDefault() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        ConfigurationSection poolConfig = mock(ConfigurationSection.class);
+
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(poolConfig);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        // Invalid: pool size exceeds maximum (100)
+        when(poolConfig.getInt("maximum-pool-size", 10)).thenReturn(500);
+        when(poolConfig.getInt("minimum-idle", 2)).thenReturn(2);
+        when(poolConfig.getLong("connection-timeout", 30000)).thenReturn(30000L);
+        when(poolConfig.getLong("idle-timeout", 600000)).thenReturn(600000L);
+        when(poolConfig.getLong("max-lifetime", 1800000)).thenReturn(1800000L);
+
+        // Should not throw - excessive values use defaults
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+        assertNotNull(manager);
+    }
 }
