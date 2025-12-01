@@ -103,6 +103,42 @@ public class DatabaseManager {
     }
 
     /**
+     * Validates MySQL connection parameters to prevent JDBC URL injection attacks.
+     *
+     * @param host MySQL server hostname
+     * @param port MySQL server port
+     * @param database MySQL database name
+     * @param username MySQL username
+     * @throws IllegalArgumentException if any parameter is invalid
+     */
+    private void validateMySQLParameters(String host, int port, String database, String username) {
+        // Validate host: alphanumeric, dots, hyphens, and underscores only
+        // This allows hostnames like "localhost", "db.example.com", "my-server_1"
+        if (host == null || !host.matches("^[a-zA-Z0-9._-]+$")) {
+            throw new IllegalArgumentException("Invalid MySQL host format: " + host +
+                ". Host must contain only alphanumeric characters, dots, hyphens, and underscores.");
+        }
+
+        // Validate port: must be in valid TCP port range
+        if (port < 1 || port > 65535) {
+            throw new IllegalArgumentException("Invalid MySQL port: " + port +
+                ". Port must be between 1 and 65535.");
+        }
+
+        // Validate database name: alphanumeric and underscores only (standard MySQL naming)
+        if (database == null || !database.matches("^[a-zA-Z0-9_]+$")) {
+            throw new IllegalArgumentException("Invalid MySQL database name: " + database +
+                ". Database name must contain only alphanumeric characters and underscores.");
+        }
+
+        // Validate username: alphanumeric, underscores, and hyphens (common MySQL username chars)
+        if (username == null || !username.matches("^[a-zA-Z0-9_-]+$")) {
+            throw new IllegalArgumentException("Invalid MySQL username: " + username +
+                ". Username must contain only alphanumeric characters, underscores, and hyphens.");
+        }
+    }
+
+    /**
      * Initializes MySQL database connection with HikariCP pooling.
      */
     private void initializeMySQL() throws SQLException {
@@ -111,6 +147,9 @@ public class DatabaseManager {
         final String database = mysqlConfig.getString("database", "stormtrooperx");
         final String username = mysqlConfig.getString("username", "root");
         final String password = mysqlConfig.getString("password", "");
+
+        // Validate connection parameters to prevent JDBC URL injection
+        validateMySQLParameters(host, port, database, username);
 
         // Build JDBC URL with custom properties
         final StringBuilder jdbcUrl = new StringBuilder();

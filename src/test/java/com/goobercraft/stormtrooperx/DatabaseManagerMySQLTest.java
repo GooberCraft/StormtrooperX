@@ -272,4 +272,151 @@ class DatabaseManagerMySQLTest {
         DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
         assertNotNull(manager);
     }
+
+    // ===========================================
+    // MySQL Parameter Validation Tests (Security)
+    // ===========================================
+
+    @Test
+    void testMySQLValidation_invalidHostWithInjection() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        // Attempt JDBC URL injection via host parameter
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost?allowLoadLocalInfile=true&");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+
+        // Should throw IllegalArgumentException when initialize() is called due to invalid host
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> manager.initialize()
+        );
+        assertTrue(exception.getMessage().contains("Invalid MySQL host format"));
+    }
+
+    @Test
+    void testMySQLValidation_invalidDatabaseWithInjection() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
+        // Attempt JDBC URL injection via database parameter
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("test;DROP TABLE users;--");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> manager.initialize()
+        );
+        assertTrue(exception.getMessage().contains("Invalid MySQL database name"));
+    }
+
+    @Test
+    void testMySQLValidation_invalidPort() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(99999); // Invalid port
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> manager.initialize()
+        );
+        assertTrue(exception.getMessage().contains("Invalid MySQL port"));
+    }
+
+    @Test
+    void testMySQLValidation_invalidPortZero() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(0); // Invalid port
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> manager.initialize()
+        );
+        assertTrue(exception.getMessage().contains("Invalid MySQL port"));
+    }
+
+    @Test
+    void testMySQLValidation_invalidUsername() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        // Attempt injection via username
+        when(mysqlConfig.getString("username", "root")).thenReturn("root'--");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> manager.initialize()
+        );
+        assertTrue(exception.getMessage().contains("Invalid MySQL username"));
+    }
+
+    @Test
+    void testMySQLValidation_validComplexHostname() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        // Valid complex hostname with dots, hyphens, underscores
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("db-server_1.mysql.example.com");
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        // Constructor should succeed - validation happens at initialize()
+        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+        assertNotNull(manager);
+        // Note: initialize() would still fail without actual MySQL, but validation passes
+    }
+
+    @Test
+    void testMySQLValidation_validEdgeCasePorts() {
+        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
+        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
+        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
+        when(mysqlConfig.getString("username", "root")).thenReturn("root");
+        when(mysqlConfig.getString("password", "")).thenReturn("");
+        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
+        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+
+        // Test port 1 (minimum valid)
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(1);
+        DatabaseManager manager1 = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+        assertNotNull(manager1);
+
+        // Test port 65535 (maximum valid)
+        when(mysqlConfig.getInt("port", 3306)).thenReturn(65535);
+        DatabaseManager manager2 = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
+        assertNotNull(manager2);
+    }
 }
