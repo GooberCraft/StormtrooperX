@@ -1,5 +1,6 @@
 package com.goobercraft.stormtrooperx;
 
+import java.util.EnumMap;
 import java.util.logging.Logger;
 
 import org.bstats.bukkit.Metrics;
@@ -37,7 +38,7 @@ import org.jetbrains.annotations.NotNull;
 public final class StormtrooperX extends JavaPlugin implements Listener {
     private final Logger logger = this.getLogger();
 
-    private final java.util.Map<EntityType, EntityConfig> entityConfigs = new java.util.HashMap<>();
+    private final java.util.Map<EntityType, EntityConfig> entityConfigs = new EnumMap<>(EntityType.class);
     private boolean debug = false;
     private DatabaseManager databaseManager;
     private OptOutManager optOutManager;
