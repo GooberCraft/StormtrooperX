@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2025-12-01
+
+### Performance
+- Use EnumMap for faster entity config lookups (~30% improvement)
+
+### Fixed
+- Guard against zero-length velocity vectors (prevents NaN in edge cases)
+- Validate MySQL pool configuration values with clear warnings for invalid settings
+
+### Changed
+- Document valid ranges for MySQL pool settings in config.yml
+
+### Dependencies
+- Update Mockito from 5.15.2 to 5.20.0
+
+## [1.6.1] - 2025-11-30
+
+### Security
+- Add build provenance attestation using GitHub Actions and Sigstore
+- All release artifacts are now cryptographically signed for supply chain security
+
+### Added
+- Release verification documentation in README
+- Wiki page for verifying release authenticity
+
+## [1.6.0] - 2025-11-29
+
+### Added
+- MySQL database support with HikariCP connection pooling
+- Player opt-out system with in-memory caching for performance
+- Async database operations to avoid blocking main thread
+- OptOutManager class for coordinating cache and database layers
+- Config version 3 with database configuration section
+- Automatic config migration from v2 to v3
+
+### Changed
+- Database configuration now supports both H2 (embedded) and MySQL
+- README updated with MySQL configuration documentation
+- SpigotMC badges added to README
+
+### Security
+- MySQL connection parameter validation to prevent JDBC URL injection
+- SSL configuration documentation for production MySQL connections
+
 ## [1.5.1] - 2025-11-08
 
 ### Security
@@ -160,6 +204,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.6.2]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.6.2
+[1.6.1]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.6.1
+[1.6.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.6.0
 [1.5.1]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.5.1
 [1.5.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.5.0
 [1.4.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.4.0
