@@ -1,6 +1,7 @@
 # StormtrooperX
 
 [![Build Status](https://github.com/GooberCraft/StormtrooperX/workflows/Build/badge.svg)](https://github.com/GooberCraft/StormtrooperX/actions)
+[![CodeFactor](https://www.codefactor.io/repository/github/goobercraft/stormtrooperx/badge)](https://www.codefactor.io/repository/github/goobercraft/stormtrooperx)
 [![License](https://img.shields.io/github/license/GooberCraft/StormtrooperX)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/GooberCraft/StormtrooperX)](https://github.com/GooberCraft/StormtrooperX/releases)
 [![SpigotMC](https://img.shields.io/spiget/downloads/130400)](https://www.spigotmc.org/resources/stormtrooperx.130400/)
