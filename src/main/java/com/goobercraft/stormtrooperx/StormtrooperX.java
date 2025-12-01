@@ -397,6 +397,14 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         final Vector velocity = event.getProjectile().getVelocity();
         final double originalSpeed = velocity.length();
 
+        // Guard against zero-length velocity (normalize would produce NaN)
+        if (originalSpeed == 0) {
+            if (debug) {
+                logger.info("Skipping projectile with zero velocity from " + entityType);
+            }
+            return;
+        }
+
         // Generate random deviation scaled by accuracy factor
         // Note: accuracy is already clamped to [0.0, 1.0] in EntityConfig constructor
         final Vector deviation = Vector.getRandom();
