@@ -50,7 +50,6 @@ jobs:
 
     # Upload to Modrinth
     - name: Publish to Modrinth
-      if: ${{ secrets.MODRINTH_TOKEN != '' }}
       uses: cloudnode-pro/modrinth-publish@v2
       continue-on-error: true
       with:
