@@ -10,6 +10,8 @@
     <packaging>jar</packaging>
 
     <name>StormtrooperX</name>
+    <description>A Minecraft Spigot plugin that reduces ranged mob accuracy - make Skeletons, Strays, Pillagers, and Piglins miss like Stormtroopers</description>
+    <url>https://github.com/GooberCraft/StormtrooperX</url>
 
     <properties>
         <java.version>11</java.version>

@@ -1,15 +1,19 @@
 # StormtrooperX
 
+<!-- Keywords: skeleton nerf, mob accuracy plugin, make skeletons miss, reduce skeleton aim,
+survival balance, ranged mob difficulty, pillager accuracy, stray nerf, make mobs miss,
+skeleton aim nerf, balance mob difficulty, reduce mob damage, piglins miss, bogged accuracy -->
+
 [![Build Status](https://github.com/GooberCraft/StormtrooperX/workflows/Build/badge.svg)](https://github.com/GooberCraft/StormtrooperX/actions)
 [![CodeFactor](https://www.codefactor.io/repository/github/goobercraft/stormtrooperx/badge)](https://www.codefactor.io/repository/github/goobercraft/stormtrooperx)
 [![License](https://img.shields.io/github/license/GooberCraft/StormtrooperX)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/GooberCraft/StormtrooperX)](https://github.com/GooberCraft/StormtrooperX/releases)
 [![SpigotMC](https://img.shields.io/spiget/downloads/130400)](https://www.spigotmc.org/resources/stormtrooperx.130400/)
 [![SpigotMC Rating](https://img.shields.io/spiget/rating/130400)](https://www.spigotmc.org/resources/stormtrooperx.130400/)
+[![Modrinth Downloads](https://img.shields.io/modrinth/dt/stormtrooperx)](https://modrinth.com/plugin/stormtrooperx)
 [![bStats Servers](https://img.shields.io/bstats/servers/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
-[![bStats Players](https://img.shields.io/bstats/players/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 
-A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs like Skeletons, Strays, Bogged, Pillagers, and Piglins - because they aim like stormtroopers!
+A lightweight Minecraft Spigot plugin that makes ranged mobs miss more often. Reduce the accuracy of Skeletons, Strays, Bogged, Pillagers, and Piglins to balance survival difficulty - because sometimes mobs aim like stormtroopers!
 
 > **Note:** This is a refactored and enhanced version of [Stormtrooper](https://github.com/byteful/Stormtrooper) by byteful, with added features including multi-mob support, version compatibility, and improved velocity handling.
 
@@ -43,6 +47,7 @@ A lightweight Minecraft Spigot plugin that nerfs the accuracy of ranged mobs lik
 1. Download the latest release from:
    - [GitHub Releases](../../releases) page
    - [SpigotMC](https://www.spigotmc.org/resources/stormtrooperx.130400/)
+   - [Modrinth](https://modrinth.com/plugin/stormtrooperx)
 2. Place `StormtrooperX.jar` in your server's `plugins` folder
 3. Restart your server or use a plugin manager to load it
 4. Configure the plugin in `plugins/StormtrooperX/config.yml`
