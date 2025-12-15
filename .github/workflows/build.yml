@@ -39,7 +39,7 @@ jobs:
 
     # Optional: Cache compiled classes for faster rebuilds
     - name: Cache build output
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: target
         key: ${{ runner.os }}-maven-build-${{ matrix.java-version }}-${{ hashFiles('**/pom.xml', 'src/**') }}
