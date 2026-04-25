@@ -74,12 +74,12 @@ class CommandHandlerTest {
         PluginDescriptionFile description = mock(PluginDescriptionFile.class);
         when(command.getName()).thenReturn("stormtrooperx");
         doReturn(description).when(plugin).getDescription();
-        when(description.getVersion()).thenReturn("1.6.3");
+        when(description.getVersion()).thenReturn("1.7.0");
 
         boolean result = plugin.onCommand(sender, command, "stx", new String[]{});
 
         assertTrue(result);
-        verify(sender).sendMessage(ChatColor.GOLD + "  StormtrooperX v1.6.3");
+        verify(sender).sendMessage(ChatColor.GOLD + "  StormtrooperX v1.7.0");
     }
 
     // -------------------------------------------------------------------------
