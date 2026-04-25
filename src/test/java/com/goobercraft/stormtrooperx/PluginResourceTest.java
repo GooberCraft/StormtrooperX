@@ -58,6 +58,32 @@ class PluginResourceTest {
         System.out.println("✓ plugin.yml version correctly resolved to: " + version);
     }
 
+    @Test
+    void testPluginApiVersionIsCorrect() {
+        InputStream pluginYml = getClass().getClassLoader().getResourceAsStream("plugin.yml");
+        assertNotNull(pluginYml, "plugin.yml should be available on classpath");
+
+        Scanner scanner = new Scanner(pluginYml);
+        String apiVersionLine = null;
+
+        while (scanner.hasNextLine()) {
+            String line = scanner.nextLine().trim();
+            if (line.startsWith("api-version:")) {
+                apiVersionLine = line;
+                break;
+            }
+        }
+        scanner.close();
+
+        assertNotNull(apiVersionLine, "plugin.yml should contain an 'api-version:' line");
+
+        String apiVersion = apiVersionLine.substring(apiVersionLine.indexOf(':') + 1).trim();
+        apiVersion = apiVersion.replaceAll("^['\"]|['\"]$", "");
+
+        assertEquals("1.18", apiVersion,
+                "api-version should be '1.18' — update this test when the minimum is intentionally raised");
+    }
+
     /**
      * Tests that the version in plugin.yml is a valid, non-empty string.
      */

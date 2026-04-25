@@ -1,7 +1,7 @@
 name: StormtrooperX
 version: '${project.version}'
 main: com.goobercraft.stormtrooperx.StormtrooperX
-api-version: '1.13'
+api-version: '1.18'
 author: GooberCraft
 description: Make ranged mobs miss more - reduce accuracy of Skeletons, Strays, Bogged, Pillagers, and Piglins to balance survival difficulty
 website: https://github.com/GooberCraft/StormtrooperX

@@ -34,13 +34,13 @@ A lightweight Minecraft Spigot plugin that makes ranged mobs miss more often. Re
 ## Supported Mobs
 
 ### Bow Users
-- Skeleton (1.13+)
-- Stray (1.13+)
+- Skeleton
+- Stray
 - Bogged (1.21+ only)
 
 ### Crossbow Users
-- Pillager (1.14+ only)
-- Piglin (1.16+ only)
+- Pillager
+- Piglin
 
 ## Installation
 
@@ -123,10 +123,10 @@ entities:
     accuracy: 0.7
 
   # Crossbow Users
-  pillager:  # 1.14+ only
+  pillager:
     enabled: true
     accuracy: 0.7
-  piglin:  # 1.16+ only
+  piglin:
     enabled: true
     accuracy: 0.7
 
@@ -151,8 +151,8 @@ debug: false
 - **skeleton**: Skeleton mobs. Default: enabled, accuracy 0.7
 - **stray**: Stray mobs. Default: enabled, accuracy 0.7
 - **bogged**: Bogged mobs (1.21+ only). Default: enabled, accuracy 0.7
-- **pillager**: Pillager mobs (1.14+ only). Default: enabled, accuracy 0.7
-- **piglin**: Piglin mobs (1.16+ only). Default: enabled, accuracy 0.7
+- **pillager**: Pillager mobs. Default: enabled, accuracy 0.7
+- **piglin**: Piglin mobs. Default: enabled, accuracy 0.7
 
 **Database Settings:**
 - **database.type**: Database type - `h2` (embedded, default) or `mysql`
@@ -203,7 +203,7 @@ The plugin automatically migrates old config formats. Your settings will be pres
 
 ### Prerequisites
 
-- Java 11 or higher
+- Java 17 or higher
 - Maven 3.6 or higher
 
 ### Build Steps
@@ -219,24 +219,22 @@ The plugin automatically migrates old config formats. Your settings will be pres
    mvn clean package
    ```
 
-3. The compiled JAR will be in `target/StormtrooperX-1.0.jar`
+3. The compiled JAR will be in `target/StormtrooperX-<version>.jar`
 
 ### Automated Builds
 
 This repository includes GitHub Actions workflows:
 
-- **Build Workflow** (`.github/workflows/build.yml`): Automatically builds the plugin on every push to master/develop and pull requests. Tests against Java 11, 17, and 21 to ensure compatibility. Includes automated testing with JUnit and code coverage reporting. Artifacts are available in the Actions tab.
+- **Build Workflow** (`.github/workflows/build.yml`): Automatically builds the plugin on every push to master/develop and pull requests. Tests against Java 17, 21, and 25 to ensure compatibility. Includes automated testing with JUnit and code coverage reporting. Artifacts are available in the Actions tab.
 - **Release Workflow** (`.github/workflows/release.yml`): Automatically builds and attaches the JAR file to GitHub releases when you create a new release.
 
 ## Compatibility
 
-- **Minecraft Version**: 1.13 - 1.21.x (and future versions)
+- **Minecraft Version**: 1.18 - 26.1.x (and future versions)
 - **Server Software**: Spigot, Paper, Purpur, or any Spigot-based server
-- **Java Version**: 11+ (tested on Java 11, 17, and 21)
+- **Java Version**: 17+ (tested on Java 17, 21, and 25)
 
 **Version Notes**:
-- Minecraft 1.13-1.16.5: Java 11+
-- Minecraft 1.17-1.17.1: Java 16+
 - Minecraft 1.18+: Java 17+
 - The Bogged mob type is only available in Minecraft 1.21+. On earlier versions, the plugin will work normally but Bogged will be unavailable.
 

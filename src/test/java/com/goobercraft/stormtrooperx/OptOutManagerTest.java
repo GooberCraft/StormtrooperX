@@ -3,6 +3,8 @@ package com.goobercraft.stormtrooperx;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.util.logging.Level;
+
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -192,6 +194,27 @@ public class OptOutManagerTest {
 
         // Verify database was not called
         verify(databaseManager, never()).setOptOut(any(), anyBoolean());
+    }
+
+    @Test
+    public void testSetOptOut_databaseException_doesNotThrow() {
+        UUID playerUUID = UUID.randomUUID();
+        doThrow(new RuntimeException("DB unavailable")).when(databaseManager).setOptOut(any(), anyBoolean());
+
+        assertDoesNotThrow(() -> optOutManager.setOptOut(playerUUID, true));
+    }
+
+    @Test
+    public void testSetOptOut_databaseException_cacheRemainsConsistent() {
+        UUID playerUUID = UUID.randomUUID();
+        doThrow(new RuntimeException("DB unavailable")).when(databaseManager).setOptOut(any(), anyBoolean());
+
+        optOutManager.setOptOut(playerUUID, true);
+
+        // Cache is updated before the async DB write — it must reflect the intended state
+        // even though the database write failed
+        assertTrue(optOutManager.isOptedOut(playerUUID), "Cache must reflect opt-out despite DB failure");
+        verify(logger).log(eq(Level.WARNING), anyString(), any(Throwable.class));
     }
 
     @Test
