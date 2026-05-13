@@ -245,8 +245,9 @@ StormtrooperX/
 - Handle version-specific features gracefully (see Bogged/Parched mob handling)
 
 ### Server Software
-- Must work on Spigot, Paper, and Purpur
+- Must work on Spigot, Paper, Purpur, and Folia
 - Use Bukkit API when possible for maximum compatibility
+- Folia compatibility is achieved via runtime detection in `com.goobercraft.stormtrooperx.scheduler.PluginScheduler` — never call `Bukkit.getScheduler()` directly in new code, inject `PluginScheduler` and use `runAsync` / `runGlobal` instead. No Folia/Paper API dependency is added to the build.
 
 ## Testing Guidelines
 

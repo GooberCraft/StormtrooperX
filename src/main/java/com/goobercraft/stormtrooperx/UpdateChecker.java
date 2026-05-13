@@ -1,6 +1,5 @@
 package com.goobercraft.stormtrooperx;
 
-import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 
 import java.io.BufferedReader;
@@ -8,6 +7,9 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.logging.Level;
+import java.util.regex.Pattern;
+
+import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
 
 /**
  * Utility class to check for plugin updates from GitHub Releases.
@@ -15,29 +17,44 @@ import java.util.logging.Level;
 public class UpdateChecker {
 
     private final Plugin plugin;
+    private final PluginScheduler scheduler;
     private final String githubRepo;
     private String latestVersion;
-    
+
     // Maximum allowed response size to prevent memory exhaustion attacks
     private static final int MAX_RESPONSE_SIZE_BYTES = 1024 * 1024; // 1MB
+
+    // GitHub's actual owner/repo naming rules: alphanumeric, dot, hyphen, underscore.
+    // Defense-in-depth: rejects path-traversal segments, query/fragment delimiters,
+    // and JDBC/log-injection control characters even though the host is fixed to
+    // api.github.com at the call site.
+    private static final Pattern GITHUB_REPO_PATTERN = Pattern.compile("^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$");
 
     /**
      * Creates a new update checker.
      *
-     * @param plugin The plugin instance
+     * @param plugin The plugin instance (used for logging and version lookup)
+     * @param scheduler Scheduler abstraction for async dispatch (must not be null)
      * @param githubRepo The GitHub repository in format "owner/repo"
-     * @throws IllegalArgumentException if githubRepo is null, empty, or invalid format
+     * @throws IllegalArgumentException if any required parameter is invalid
      */
-    public UpdateChecker(Plugin plugin, String githubRepo) {
+    public UpdateChecker(Plugin plugin, PluginScheduler scheduler, String githubRepo) {
         // Defensive: validate constructor parameters
+        if (plugin == null) {
+            throw new IllegalArgumentException("plugin cannot be null");
+        }
+        if (scheduler == null) {
+            throw new IllegalArgumentException("scheduler cannot be null");
+        }
         if (githubRepo == null || githubRepo.isEmpty()) {
             throw new IllegalArgumentException("githubRepo cannot be null or empty");
         }
-        if (!githubRepo.contains("/")) {
+        if (!GITHUB_REPO_PATTERN.matcher(githubRepo).matches()) {
             throw new IllegalArgumentException("githubRepo must be in format 'owner/repo', got: " + githubRepo);
         }
 
         this.plugin = plugin;
+        this.scheduler = scheduler;
         this.githubRepo = githubRepo;
     }
 
@@ -47,7 +64,7 @@ public class UpdateChecker {
      * @param callback Callback to run after check completes
      */
     public void checkForUpdates(UpdateCallback callback) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        scheduler.runAsync(() -> {
             try {
                 final String currentVersion = plugin.getDescription().getVersion();
                 latestVersion = fetchLatestVersion();
@@ -58,9 +75,7 @@ public class UpdateChecker {
                 }
 
                 final int comparison = compareVersions(currentVersion, latestVersion);
-
-                // Run callback on main thread
-                Bukkit.getScheduler().runTask(plugin, () -> callback.onComplete(comparison, currentVersion, latestVersion));
+                callback.onComplete(comparison, currentVersion, latestVersion);
 
             } catch (Exception e) {
                 plugin.getLogger().log(Level.WARNING, "Failed to check for updates", e);
@@ -228,6 +243,11 @@ public class UpdateChecker {
     public interface UpdateCallback {
         /**
          * Called when the update check completes.
+         *
+         * <p><b>Threading:</b> invoked on the async worker thread used for the
+         * HTTP fetch &mdash; <em>not</em> on a Bukkit region/main thread.
+         * Implementations must not touch the Bukkit API. Logging via
+         * {@code java.util.logging} is safe.</p>
          *
          * @param comparison Negative if outdated, 0 if up-to-date, positive if ahead
          * @param currentVersion The current plugin version

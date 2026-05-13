@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.lang.reflect.Method;
 import java.util.logging.Logger;
 
+import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -23,9 +25,23 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class UpdateCheckerTest {
 
+    /** Runs scheduled tasks inline on the caller thread for deterministic testing. */
+    private static final class InlinePluginScheduler implements PluginScheduler {
+        @Override
+        public void runAsync(Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public void runGlobal(Runnable task) {
+            task.run();
+        }
+    }
+
     @Mock
     private Plugin plugin;
 
+    private PluginScheduler scheduler;
     private UpdateChecker updateChecker;
 
     @BeforeEach
@@ -37,7 +53,8 @@ class UpdateCheckerTest {
         // Use lenient stubbing since not all tests will call these methods
         lenient().when(plugin.getLogger()).thenReturn(logger);
         lenient().when(plugin.getDescription()).thenReturn(description);
-        updateChecker = new UpdateChecker(plugin, "owner/repo");
+        scheduler = new InlinePluginScheduler();
+        updateChecker = new UpdateChecker(plugin, scheduler, "owner/repo");
     }
 
     @Test
@@ -46,9 +63,25 @@ class UpdateCheckerTest {
     }
 
     @Test
+    void testConstructor_nullPlugin() {
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
+            new UpdateChecker(null, scheduler, "owner/repo");
+        });
+        assertEquals("plugin cannot be null", exception.getMessage());
+    }
+
+    @Test
+    void testConstructor_nullScheduler() {
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
+            new UpdateChecker(plugin, null, "owner/repo");
+        });
+        assertEquals("scheduler cannot be null", exception.getMessage());
+    }
+
+    @Test
     void testConstructor_nullGithubRepo() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, null);
+            new UpdateChecker(plugin, scheduler, null);
         });
         assertEquals("githubRepo cannot be null or empty", exception.getMessage());
     }
@@ -56,7 +89,7 @@ class UpdateCheckerTest {
     @Test
     void testConstructor_emptyGithubRepo() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, "");
+            new UpdateChecker(plugin, scheduler, "");
         });
         assertEquals("githubRepo cannot be null or empty", exception.getMessage());
     }
@@ -64,7 +97,7 @@ class UpdateCheckerTest {
     @Test
     void testConstructor_invalidFormat_noSlash() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, "invalidrepo");
+            new UpdateChecker(plugin, scheduler, "invalidrepo");
         });
         assertEquals("githubRepo must be in format 'owner/repo', got: invalidrepo", exception.getMessage());
     }
@@ -72,8 +105,49 @@ class UpdateCheckerTest {
     @Test
     void testConstructor_validFormat() {
         // Should not throw
-        UpdateChecker checker = new UpdateChecker(plugin, "owner/repo");
+        UpdateChecker checker = new UpdateChecker(plugin, scheduler, "owner/repo");
         assertNotNull(checker);
+    }
+
+    @Test
+    void testConstructor_rejectsSemicolonInjection() {
+        // Defense-in-depth: the URL is fixed to api.github.com, but we still
+        // reject suspicious characters in the repo segment.
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
+            new UpdateChecker(plugin, scheduler, "owner/repo;DROP TABLE");
+        });
+        assertTrue(exception.getMessage().startsWith("githubRepo must be in format 'owner/repo'"));
+    }
+
+    @Test
+    void testConstructor_rejectsMultipleSlashes() {
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
+            new UpdateChecker(plugin, scheduler, "owner/extra/repo");
+        });
+        assertTrue(exception.getMessage().startsWith("githubRepo must be in format 'owner/repo'"));
+    }
+
+    @Test
+    void testConstructor_rejectsPathTraversal() {
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
+            new UpdateChecker(plugin, scheduler, "../sensitive/path");
+        });
+        assertTrue(exception.getMessage().startsWith("githubRepo must be in format 'owner/repo'"));
+    }
+
+    @Test
+    void testConstructor_rejectsCrlfInjection() {
+        // CRLF in the repo string could enable header/log injection in some contexts
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
+            new UpdateChecker(plugin, scheduler, "owner/repo\r\nHost: evil.com");
+        });
+        assertTrue(exception.getMessage().startsWith("githubRepo must be in format 'owner/repo'"));
+    }
+
+    @Test
+    void testConstructor_acceptsValidRepoChars() {
+        // GitHub-legal owner/repo names: alphanumeric, dot, hyphen, underscore
+        assertNotNull(new UpdateChecker(plugin, scheduler, "MyOrg-1/my.repo_v2"));
     }
 
     @Test

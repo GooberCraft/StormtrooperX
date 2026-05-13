@@ -11,31 +11,36 @@ import java.util.logging.Logger;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.scheduler.BukkitScheduler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
+
+import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
 
 /**
  * Unit tests for OptOutManager.
  */
 public class OptOutManagerTest {
 
+    /** Runs scheduled tasks inline on the caller thread for deterministic testing. */
+    private static final class InlinePluginScheduler implements PluginScheduler {
+        @Override
+        public void runAsync(Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public void runGlobal(Runnable task) {
+            task.run();
+        }
+    }
+
     @Mock
     private Logger logger;
 
     @Mock
     private DatabaseManager databaseManager;
-
-    @Mock
-    private Plugin plugin;
-
-    @Mock
-    private BukkitScheduler scheduler;
 
     @Mock
     private Player player;
@@ -46,6 +51,7 @@ public class OptOutManagerTest {
     @Mock
     private PlayerQuitEvent quitEvent;
 
+    private PluginScheduler scheduler;
     private OptOutManager optOutManager;
     private UUID testUUID;
 
@@ -53,33 +59,10 @@ public class OptOutManagerTest {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
 
-        // Mock scheduler to run tasks synchronously for testing
-        // This makes async code behave synchronously in tests
-        when(plugin.getServer()).thenReturn(mock(org.bukkit.Server.class));
-        when(plugin.getServer().getScheduler()).thenReturn(scheduler);
-
-        // Run async tasks immediately on the same thread
-        doAnswer(new Answer<Void>() {
-            @Override
-            public Void answer(InvocationOnMock invocation) {
-                Runnable task = invocation.getArgument(1);
-                task.run();  // Execute immediately
-                return null;
-            }
-        }).when(scheduler).runTaskAsynchronously(any(Plugin.class), any(Runnable.class));
-
-        // Also handle sync tasks (for future use)
-        doAnswer(new Answer<Void>() {
-            @Override
-            public Void answer(InvocationOnMock invocation) {
-                Runnable task = invocation.getArgument(1);
-                task.run();  // Execute immediately
-                return null;
-            }
-        }).when(scheduler).runTask(any(Plugin.class), any(Runnable.class));
+        scheduler = new InlinePluginScheduler();
 
         // Use typical server size for testing (100 players)
-        optOutManager = new OptOutManager(logger, databaseManager, plugin, 100);
+        optOutManager = new OptOutManager(logger, databaseManager, scheduler, 100);
         testUUID = UUID.randomUUID();
 
         // Setup mock player
@@ -90,7 +73,7 @@ public class OptOutManagerTest {
     @Test
     public void testConstructor_nullLogger() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new OptOutManager(null, databaseManager, plugin, 100);
+            new OptOutManager(null, databaseManager, scheduler, 100);
         });
         assertEquals("logger cannot be null", exception.getMessage());
     }
@@ -98,23 +81,23 @@ public class OptOutManagerTest {
     @Test
     public void testConstructor_nullDatabaseManager() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new OptOutManager(logger, null, plugin, 100);
+            new OptOutManager(logger, null, scheduler, 100);
         });
         assertEquals("databaseManager cannot be null", exception.getMessage());
     }
 
     @Test
-    public void testConstructor_nullPlugin() {
+    public void testConstructor_nullScheduler() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
             new OptOutManager(logger, databaseManager, null, 100);
         });
-        assertEquals("plugin cannot be null", exception.getMessage());
+        assertEquals("scheduler cannot be null", exception.getMessage());
     }
 
     @Test
     public void testConstructor_zeroMaxPlayers() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new OptOutManager(logger, databaseManager, plugin, 0);
+            new OptOutManager(logger, databaseManager, scheduler, 0);
         });
         assertEquals("maxPlayers must be positive, got: 0", exception.getMessage());
     }
@@ -122,7 +105,7 @@ public class OptOutManagerTest {
     @Test
     public void testConstructor_negativeMaxPlayers() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new OptOutManager(logger, databaseManager, plugin, -100);
+            new OptOutManager(logger, databaseManager, scheduler, -100);
         });
         assertEquals("maxPlayers must be positive, got: -100", exception.getMessage());
     }
@@ -402,7 +385,7 @@ public class OptOutManagerTest {
     @Test
     public void testCacheSizing_SmallServer() {
         // Small server (< 64 players) should use minimum capacity of 16
-        OptOutManager smallServerManager = new OptOutManager(logger, databaseManager, plugin, 20);
+        OptOutManager smallServerManager = new OptOutManager(logger, databaseManager, scheduler, 20);
         assertNotNull(smallServerManager, "OptOutManager should initialize with small server size");
     }
 
@@ -410,14 +393,14 @@ public class OptOutManagerTest {
     public void testCacheSizing_LargeServer() {
         // Large server should size cache proportionally
         // 1000 players / 4 = 250 capacity
-        OptOutManager largeServerManager = new OptOutManager(logger, databaseManager, plugin, 1000);
+        OptOutManager largeServerManager = new OptOutManager(logger, databaseManager, scheduler, 1000);
         assertNotNull(largeServerManager, "OptOutManager should initialize with large server size");
     }
 
     @Test
     public void testCacheSizing_MinimumCapacity() {
         // Very small server should still get minimum capacity
-        OptOutManager tinyServerManager = new OptOutManager(logger, databaseManager, plugin, 10);
+        OptOutManager tinyServerManager = new OptOutManager(logger, databaseManager, scheduler, 10);
         assertNotNull(tinyServerManager, "OptOutManager should initialize with minimum capacity");
     }
 }
