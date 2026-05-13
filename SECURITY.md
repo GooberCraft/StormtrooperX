@@ -6,13 +6,13 @@ We actively provide security updates for the following versions:
 
 | Version | Supported          | Minecraft Version | Java Version | Notes |
 | ------- | ------------------ | ----------------- | ------------ | ----- |
-| 1.6.x   | :white_check_mark: | 1.13 - 1.21.x     | 11+          | Current stable release |
-| 1.5.x   | :white_check_mark: | 1.13 - 1.21.x     | 11+          | Security fixes only |
-| 1.4.x   | :x:                | 1.13 - 1.21.x     | 8+           | No longer supported |
-| 1.3.x   | :x:                | 1.13 - 1.21.x     | 8+           | No longer supported |
-| < 1.3   | :x:                | N/A               | N/A          | No longer supported |
+| 1.8.x   | :white_check_mark: | 1.18 - 26.1.x     | 17+          | Current stable release |
+| 1.7.x   | :white_check_mark: | 1.18 - 26.1.x     | 17+          | Security fixes only |
+| 1.6.x   | :x:                | 1.13 - 1.21.x     | 11+          | No longer supported |
+| 1.5.x   | :x:                | 1.13 - 1.21.x     | 11+          | No longer supported |
+| < 1.5   | :x:                | N/A               | N/A          | No longer supported |
 
-**Note**: While the plugin is compatible with Minecraft 1.13+, we recommend using the latest stable Minecraft version and keeping the plugin updated.
+**Note**: While older builds were compatible with Minecraft 1.13+, the supported line now requires Minecraft 1.18+ and Java 17+. We recommend using the latest stable Minecraft version and keeping the plugin updated.
 
 ## Verifying Release Authenticity
 
@@ -23,7 +23,7 @@ Starting with **v1.6.1**, all releases include cryptographic build attestations 
 Install [GitHub CLI](https://cli.github.com/) and verify the downloaded JAR:
 
 ```bash
-gh attestation verify StormtrooperX-1.6.1.jar --repo GooberCraft/StormtrooperX
+gh attestation verify StormtrooperX-1.8.0.jar --repo GooberCraft/StormtrooperX
 ```
 
 Successful verification confirms:
@@ -72,9 +72,9 @@ StormtrooperX stores player opt-out preferences in a database:
 
 **Build Process**:
 - Automated builds on every commit (no manual builds)
-- 106 automated tests run before release
-- Code coverage monitoring via JaCoCo
-- Multi-version Java testing (11, 17, 21)
+- Comprehensive automated test suite runs before release (150+ tests)
+- Code coverage monitoring via JaCoCo (≥60% line coverage enforced per package)
+- Multi-version Java testing (17, 21, 25)
 
 ### External Communications
 The plugin makes outbound HTTPS requests to:
@@ -190,7 +190,7 @@ When a security vulnerability is confirmed:
 
 ### Server Hardening
 - Keep your server software (Spigot/Paper) updated
-- Use the latest Java LTS version (Java 21 recommended, Java 11+ required)
+- Use the latest Java LTS version (Java 21 recommended, Java 17+ required)
 - Regularly update all plugins, including StormtrooperX
 - Review server logs for unusual activity
 - Use proper file permissions for the `plugins/` directory

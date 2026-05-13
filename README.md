@@ -176,17 +176,11 @@ debug: false
 
 ### Config Migration
 
-The plugin automatically migrates old config formats. Your settings will be preserved:
+The plugin automatically migrates old config formats on first load. Your settings will be preserved:
 
 **Upgrading from v1.5.x or earlier (to v3):**
 - Database configuration section added (defaults to H2)
-- All existing settings preserved
-- Migration happens automatically on first load
-
-**Upgrading from v1.3.0 or earlier (to v2):**
-- Old global `accuracy` value → applied to all entities
-- Old entity enable/disable settings → preserved
-- Per-entity configuration format introduced
+- All existing per-entity settings preserved
 
 ## Commands
 
@@ -194,7 +188,7 @@ The plugin automatically migrates old config formats. Your settings will be pres
 |---------|---------|-------------|------------|
 | `/stormtrooperx` | `/stx`, `/stormtrooper` | Show plugin info | `stormtrooperx.use` |
 | `/stormtrooperx reload` | - | Reload configuration | `stormtrooperx.reload` |
-| `/stormtrooperx optout` | `/stx toggle` | Toggle mob accuracy nerfs for yourself | `stormtrooperx.optout` |
+| `/stormtrooperx optout` | `toggle` | Toggle mob accuracy nerfs for yourself | `stormtrooperx.optout` |
 
 ## Permissions
 

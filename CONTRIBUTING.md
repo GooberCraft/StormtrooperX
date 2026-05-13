@@ -40,7 +40,7 @@ Have a question? Use the [question template](https://github.com/GooberCraft/Stor
 
 ### Prerequisites
 
-- **Java**: JDK 11 or higher (we test on Java 11, 17, and 21)
+- **Java**: JDK 17 or higher (we test on Java 17, 21, and 25)
 - **Maven**: 3.6 or higher
 - **Git**: For version control
 - **IDE**: IntelliJ IDEA or Eclipse recommended
@@ -199,7 +199,7 @@ Fixes #38
 ### PR Review Process
 
 - Maintainers will review your PR
-- CI/CD checks must pass (build on Java 11, 17, 21)
+- CI/CD checks must pass (build on Java 17, 21, 25)
 - Address any feedback or requested changes
 - Once approved, a maintainer will merge your PR
 
@@ -214,8 +214,9 @@ StormtrooperX/
 │   ├── main/
 │   │   ├── java/
 │   │   │   └── com/goobercraft/stormtrooperx/
-│   │   │       ├── StormtrooperX.java      # Main plugin class
-│   │   │       ├── DatabaseManager.java    # H2 database operations
+│   │   │       ├── StormtrooperX.java      # Main plugin class, event handler, command dispatch
+│   │   │       ├── DatabaseManager.java    # H2 (embedded) and MySQL (HikariCP) persistence
+│   │   │       ├── OptOutManager.java      # Cached, async opt-out facade over DatabaseManager
 │   │   │       └── UpdateChecker.java      # GitHub release checker
 │   │   └── resources/
 │   │       ├── config.yml                  # Default configuration
@@ -234,14 +235,14 @@ StormtrooperX/
 ## Compatibility Requirements
 
 ### Java Version
-- **Minimum**: Java 11
+- **Minimum**: Java 17
 - **Recommended**: Java 17+
-- Test on multiple versions when possible
+- CI tests against Java 17, 21, and 25
 
 ### Minecraft Version
-- **Minimum**: 1.13
-- **Current**: 1.21.x
-- Handle version-specific features gracefully (see Bogged mob handling)
+- **Minimum**: 1.18
+- **Current**: 1.21.x – 26.1.x
+- Handle version-specific features gracefully (see Bogged/Parched mob handling)
 
 ### Server Software
 - Must work on Spigot, Paper, and Purpur
@@ -252,14 +253,17 @@ StormtrooperX/
 ### Unit Tests
 - Write tests for new features
 - Maintain or improve code coverage
-- Use JUnit 5
-- Mock Bukkit objects when needed
+- Use JUnit Jupiter (6.x)
+- Mock Bukkit objects with Mockito when needed
 
 Example test structure:
 ```java
 @Test
 void testPlayerOptOut() {
-    DatabaseManager db = new DatabaseManager(logger, dataFolder);
+    // DatabaseManager(logger, dataFolder, databaseType, mysqlConfig)
+    // mysqlConfig may be null when databaseType is "h2"
+    DatabaseManager db = new DatabaseManager(logger, dataFolder, "h2", null);
+    db.initialize();
     UUID playerId = UUID.randomUUID();
 
     // Initially not opted out
@@ -287,13 +291,16 @@ When adding features that depend on specific Minecraft versions:
 
 ```java
 // Example: Handle version-specific mob types
-if (getConfig().getBoolean("pillager", true)) {
+// Config shape: entities.<name>.enabled / .accuracy
+final String path = "entities.pillager";
+if (getConfig().getBoolean(path + ".enabled", true)) {
     try {
-        EntityType pillagerType = EntityType.valueOf("PILLAGER");
-        entities.add(pillagerType);
+        final EntityType pillagerType = EntityType.valueOf("PILLAGER");
+        final double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
+        entityConfigs.put(pillagerType, new EntityConfig(true, accuracy));
         logger.info("Entity 'Pillager' will be nerfed!");
     } catch (IllegalArgumentException e) {
-        logger.info("Entity 'Pillager' is not available in this version");
+        logger.info("Entity 'Pillager' is not available in this Minecraft version (1.14+ required)");
     }
 }
 ```
@@ -302,7 +309,7 @@ if (getConfig().getBoolean("pillager", true)) {
 
 ### Adding New Dependencies
 - Keep dependencies minimal
-- Ensure compatibility with Java 11
+- Ensure compatibility with Java 17
 - Use Maven shade plugin for any non-Bukkit dependencies
 - Relocate packages to avoid conflicts
 
@@ -310,7 +317,7 @@ Example in `pom.xml`:
 ```xml
 <relocation>
     <pattern>org.h2</pattern>
-    <shadedPattern>com.goobercraft.stormtrooperx.libs.h2</shadedPattern>
+    <shadedPattern>com.goobercraft.stormtrooperx.h2</shadedPattern>
 </relocation>
 ```
 
