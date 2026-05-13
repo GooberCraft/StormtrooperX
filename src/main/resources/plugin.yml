@@ -2,6 +2,7 @@ name: StormtrooperX
 version: '${project.version}'
 main: com.goobercraft.stormtrooperx.StormtrooperX
 api-version: '1.18'
+folia-supported: true
 author: GooberCraft
 description: Make ranged mobs miss more - reduce accuracy of Skeletons, Strays, Bogged, Parched, Pillagers, and Piglins to balance survival difficulty
 website: https://github.com/GooberCraft/StormtrooperX

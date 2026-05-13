@@ -230,13 +230,14 @@ This repository includes GitHub Actions workflows:
 ## Compatibility
 
 - **Minecraft Version**: 1.18 - 26.1.x (and future versions)
-- **Server Software**: Spigot, Paper, Purpur, or any Spigot-based server
+- **Server Software**: Spigot, Paper, Purpur, Folia, or any Spigot-based server
 - **Java Version**: 17+ (tested on Java 17, 21, and 25)
 
 **Version Notes**:
 - Minecraft 1.18+: Java 17+
 - The Bogged mob type is only available in Minecraft 1.21+. On earlier versions, the plugin will work normally but Bogged will be unavailable.
 - The Parched mob type is only available in Minecraft 1.21.11+ (Mounts of Mayhem). On earlier versions, the plugin will work normally but Parched will be unavailable.
+- **Folia** (1.20.4+) is supported automatically. The plugin detects Folia at runtime and routes async work through Folia's `AsyncScheduler` / `GlobalRegionScheduler`; on Spigot/Paper the legacy `BukkitScheduler` is used. No Folia API dependency is added — the Spigot-API 1.18 compile dependency is unchanged.
 
 ## Support
 

@@ -29,6 +29,13 @@ public class DatabaseManager {
     // H2 connection (single connection, no pooling)
     private Connection h2Connection;
 
+    // Serializes access to the shared H2 connection. JDBC Connection instances
+    // are not thread-safe; multiple async tasks (OptOutManager player-join
+    // reads, /stx optout writes) can otherwise race on h2Connection. The
+    // MySQL path uses HikariCP and does not need this lock — each thread gets
+    // its own pooled connection.
+    private final Object h2Lock = new Object();
+
     // MySQL connection pool (HikariCP)
     private HikariDataSource hikariDataSource;
 
@@ -322,7 +329,15 @@ public class DatabaseManager {
         if (!validateDatabaseOperation(playerUUID)) {
             return false;
         }
+        if ("h2".equals(databaseType)) {
+            synchronized (h2Lock) {
+                return isOptedOutInternal(playerUUID);
+            }
+        }
+        return isOptedOutInternal(playerUUID);
+    }
 
+    private boolean isOptedOutInternal(UUID playerUUID) {
         final String query = "SELECT opted_out FROM player_optouts WHERE uuid = ?";
 
         Connection connection = null;
@@ -356,7 +371,16 @@ public class DatabaseManager {
         if (!validateDatabaseOperation(playerUUID)) {
             return;
         }
+        if ("h2".equals(databaseType)) {
+            synchronized (h2Lock) {
+                setOptOutInternal(playerUUID, optedOut);
+            }
+            return;
+        }
+        setOptOutInternal(playerUUID, optedOut);
+    }
 
+    private void setOptOutInternal(UUID playerUUID, boolean optedOut) {
         // Use appropriate upsert syntax for database type
         final String upsertSQL;
         if (databaseType.equals("h2")) {

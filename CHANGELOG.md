@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Folia support via a runtime-detected `PluginScheduler` abstraction. On Folia, async work routes through `AsyncScheduler` / `GlobalRegionScheduler` (via reflection so the Spigot API 1.18 compile dependency is unchanged); on Spigot/Paper the legacy `BukkitScheduler` is used. Adds `folia-supported: true` to `plugin.yml`.
+
+### Changed
+- `OptOutManager` constructor signature: replaced `Plugin` parameter with `PluginScheduler`.
+- `UpdateChecker` constructor signature: added `PluginScheduler` parameter. The update-check callback is now invoked on the async worker thread (logging only — `java.util.logging` is thread-safe); the previous main-thread hop was unnecessary on Spigot/Paper and forbidden on Folia.
+
+### Tests
+- New `PluginSchedulerTest` (7 tests) covering the legacy scheduler delegation and the factory's non-Folia branch.
+
 ## [1.8.0] - 2026-05-12
 
 ### Added

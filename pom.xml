@@ -38,6 +38,18 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.14</version>
+                <configuration>
+                    <!--
+                        FoliaScheduler is a reflective adapter that can only
+                        class-load on Folia (where Bukkit.getAsyncScheduler()
+                        exists). It cannot be exercised from CI/unit tests on
+                        the Spigot-API classpath, so it is excluded from
+                        coverage reporting and the coverage gate.
+                    -->
+                    <excludes>
+                        <exclude>com/goobercraft/stormtrooperx/scheduler/FoliaScheduler.class</exclude>
+                    </excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>

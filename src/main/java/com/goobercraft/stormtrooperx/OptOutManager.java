@@ -11,7 +11,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.Plugin;
+
+import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
 
 /**
  * Manages player opt-out preferences with an in-memory cache.
@@ -32,7 +33,7 @@ public class OptOutManager implements Listener {
 
     private final Logger logger;
     private final DatabaseManager databaseManager;
-    private final Plugin plugin;
+    private final PluginScheduler scheduler;
     private final Set<UUID> optedOutCache;
 
     /**
@@ -40,11 +41,12 @@ public class OptOutManager implements Listener {
      *
      * @param logger Logger instance (must not be null)
      * @param databaseManager Database manager for persistence (must not be null)
-     * @param plugin Plugin instance for async task scheduling (must not be null)
+     * @param scheduler Scheduler abstraction for async dispatch (must not be null)
      * @param maxPlayers Maximum number of players on the server (must be positive)
      * @throws IllegalArgumentException if any parameter is null or maxPlayers is not positive
      */
-    public OptOutManager(Logger logger, DatabaseManager databaseManager, Plugin plugin, int maxPlayers) {
+    public OptOutManager(Logger logger, DatabaseManager databaseManager,
+                         PluginScheduler scheduler, int maxPlayers) {
         // Defensive: validate constructor parameters
         if (logger == null) {
             throw new IllegalArgumentException("logger cannot be null");
@@ -52,8 +54,8 @@ public class OptOutManager implements Listener {
         if (databaseManager == null) {
             throw new IllegalArgumentException("databaseManager cannot be null");
         }
-        if (plugin == null) {
-            throw new IllegalArgumentException("plugin cannot be null");
+        if (scheduler == null) {
+            throw new IllegalArgumentException("scheduler cannot be null");
         }
         if (maxPlayers <= 0) {
             throw new IllegalArgumentException("maxPlayers must be positive, got: " + maxPlayers);
@@ -61,7 +63,7 @@ public class OptOutManager implements Listener {
 
         this.logger = logger;
         this.databaseManager = databaseManager;
-        this.plugin = plugin;
+        this.scheduler = scheduler;
 
         // Size cache for ~25% of max players opting out (conservative estimate)
         // Use thread-safe ConcurrentHashMap-backed set for async operations
@@ -130,7 +132,7 @@ public class OptOutManager implements Listener {
         }
 
         // Write to database asynchronously to avoid blocking main thread
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        scheduler.runAsync(() -> {
             try {
                 databaseManager.setOptOut(playerUUID, optedOut);
                 logger.fine("Async DB write completed for player " + playerUUID + ": opted out = " + optedOut);
@@ -174,7 +176,7 @@ public class OptOutManager implements Listener {
         final String playerName = event.getPlayer().getName();
 
         // Query database asynchronously to avoid blocking main thread during player join
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        scheduler.runAsync(() -> {
             try {
                 // Query database for opt-out status (off main thread)
                 final boolean optedOut = databaseManager.isOptedOut(playerUUID);

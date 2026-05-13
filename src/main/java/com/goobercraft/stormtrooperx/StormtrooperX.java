@@ -18,6 +18,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
+import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
+
 /**
  * StormtrooperX - A Minecraft plugin that nerfs the accuracy of ranged mobs.
  *
@@ -42,6 +44,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     private boolean debug = false;
     private DatabaseManager databaseManager;
     private OptOutManager optOutManager;
+    private PluginScheduler scheduler;
 
     /**
      * Configuration for a specific entity type.
@@ -72,13 +75,16 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
 
         loadConfiguration();
 
+        // Pick the right scheduler for this server (Folia vs legacy) once at startup
+        scheduler = PluginScheduler.create(this);
+
         // Initialize database with configuration
         final String databaseType = getConfig().getString("database.type", "h2");
         databaseManager = new DatabaseManager(logger, getDataFolder(), databaseType, getConfig().getConfigurationSection("database.mysql"));
         databaseManager.initialize();
 
         // Initialize opt-out manager with async support and server max players for cache sizing
-        optOutManager = new OptOutManager(logger, databaseManager, this, getServer().getMaxPlayers());
+        optOutManager = new OptOutManager(logger, databaseManager, scheduler, getServer().getMaxPlayers());
         this.getServer().getPluginManager().registerEvents(optOutManager, this);
 
         this.logger.info("========================================");
@@ -116,7 +122,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     }
 
     private void checkForUpdates() {
-        final UpdateChecker updateChecker = new UpdateChecker(this, "GooberCraft/StormtrooperX");
+        final UpdateChecker updateChecker = new UpdateChecker(this, scheduler, "GooberCraft/StormtrooperX");
         updateChecker.checkForUpdates((comparison, currentVersion, latestVersion) -> {
             if (comparison < 0) {
                 this.logger.info("========================================");
