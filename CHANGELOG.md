@@ -7,15 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-05-13
+
 ### Added
 - Folia support via a runtime-detected `PluginScheduler` abstraction. On Folia, async work routes through `AsyncScheduler` / `GlobalRegionScheduler` (via reflection so the Spigot API 1.18 compile dependency is unchanged); on Spigot/Paper the legacy `BukkitScheduler` is used. Adds `folia-supported: true` to `plugin.yml`.
+- If Folia is detected but its scheduler API cannot be bound (e.g., a future signature change), `PluginScheduler.create` now logs a WARNING and falls back to the legacy scheduler instead of failing plugin enable.
 
 ### Changed
 - `OptOutManager` constructor signature: replaced `Plugin` parameter with `PluginScheduler`.
 - `UpdateChecker` constructor signature: added `PluginScheduler` parameter. The update-check callback is now invoked on the async worker thread (logging only — `java.util.logging` is thread-safe); the previous main-thread hop was unnecessary on Spigot/Paper and forbidden on Folia.
+- `DatabaseManager` now serializes H2 operations through an internal lock. JDBC `Connection` instances are not thread-safe, and Folia's regional async pool can dispatch concurrent opt-out reads/writes onto the single shared H2 connection. The MySQL path is unchanged (HikariCP gives each thread its own pooled connection).
+
+### Security
+- Tightened `UpdateChecker` `githubRepo` validation to a strict `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` regex (defense-in-depth against path traversal, CRLF injection, and arbitrary URL-component characters even though the call site is hardcoded).
 
 ### Tests
 - New `PluginSchedulerTest` (7 tests) covering the legacy scheduler delegation and the factory's non-Folia branch.
+- New `UpdateChecker` constructor tests (5 tests) covering semicolon injection, multi-segment paths, path traversal, CRLF injection, and the valid-character allowlist.
 
 ## [1.8.0] - 2026-05-12
 
