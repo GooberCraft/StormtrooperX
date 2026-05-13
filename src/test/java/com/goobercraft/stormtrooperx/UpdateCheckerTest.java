@@ -484,4 +484,92 @@ class UpdateCheckerTest {
         int result = (int) method.invoke(updateChecker, "1.2.3.4.5.6.7.8", "1.2.3.4.5.6.7.9");
         assertTrue(result < 0, "Should correctly compare very long version strings");
     }
+
+    // -------------------------------------------------------------------------
+    // validateReleaseTag — barrier between untrusted GitHub response and logger
+    // -------------------------------------------------------------------------
+
+    private String invokeValidateReleaseTag(String tag) throws Exception {
+        Method method = UpdateChecker.class.getDeclaredMethod("validateReleaseTag", String.class);
+        method.setAccessible(true);
+        return (String) method.invoke(updateChecker, tag);
+    }
+
+    @Test
+    void testValidateReleaseTag_acceptsSemverWithoutPrefix() throws Exception {
+        assertEquals("1.9.0", invokeValidateReleaseTag("1.9.0"));
+    }
+
+    @Test
+    void testValidateReleaseTag_stripsLeadingV() throws Exception {
+        assertEquals("1.9.0", invokeValidateReleaseTag("v1.9.0"));
+    }
+
+    @Test
+    void testValidateReleaseTag_acceptsPreReleaseSuffix() throws Exception {
+        assertEquals("1.9.0-rc1", invokeValidateReleaseTag("1.9.0-rc1"));
+        assertEquals("1.0.0-SNAPSHOT", invokeValidateReleaseTag("v1.0.0-SNAPSHOT"));
+    }
+
+    @Test
+    void testValidateReleaseTag_acceptsBuildMetadata() throws Exception {
+        assertEquals("1.0.0+build.123", invokeValidateReleaseTag("1.0.0+build.123"));
+    }
+
+    @Test
+    void testValidateReleaseTag_acceptsShortAndLongSegments() throws Exception {
+        assertEquals("1", invokeValidateReleaseTag("1"));
+        assertEquals("1.2", invokeValidateReleaseTag("1.2"));
+        assertEquals("1.2.3.4", invokeValidateReleaseTag("1.2.3.4"));
+    }
+
+    @Test
+    void testValidateReleaseTag_rejectsNull() throws Exception {
+        assertNull(invokeValidateReleaseTag(null));
+    }
+
+    @Test
+    void testValidateReleaseTag_rejectsEmpty() throws Exception {
+        assertNull(invokeValidateReleaseTag(""));
+    }
+
+    @Test
+    void testValidateReleaseTag_rejectsNewlineInjection() throws Exception {
+        // The whole point of the barrier: a forged tag with a newline must not pass through
+        assertNull(invokeValidateReleaseTag("1.9.0\nFAKE LOG ENTRY"));
+        assertNull(invokeValidateReleaseTag("1.9.0\r\nFAKE"));
+    }
+
+    @Test
+    void testValidateReleaseTag_rejectsControlCharacters() throws Exception {
+        assertNull(invokeValidateReleaseTag("1.9.0 "));
+        assertNull(invokeValidateReleaseTag("1.9.0\t"));
+    }
+
+    @Test
+    void testValidateReleaseTag_rejectsWhitespace() throws Exception {
+        assertNull(invokeValidateReleaseTag("1.9.0 "));
+        assertNull(invokeValidateReleaseTag(" 1.9.0"));
+        assertNull(invokeValidateReleaseTag("1.9 .0"));
+    }
+
+    @Test
+    void testValidateReleaseTag_rejectsHtmlAndShellMetacharacters() throws Exception {
+        assertNull(invokeValidateReleaseTag("1.9.0<script>"));
+        assertNull(invokeValidateReleaseTag("1.9.0; rm -rf /"));
+        assertNull(invokeValidateReleaseTag("1.9.0|cat"));
+        assertNull(invokeValidateReleaseTag("1.9.0$(whoami)"));
+    }
+
+    @Test
+    void testValidateReleaseTag_rejectsTooManySegments() throws Exception {
+        // Pattern caps at 4 segments
+        assertNull(invokeValidateReleaseTag("1.2.3.4.5"));
+    }
+
+    @Test
+    void testValidateReleaseTag_rejectsNonNumericFirstSegment() throws Exception {
+        assertNull(invokeValidateReleaseTag("release-1.0"));
+        assertNull(invokeValidateReleaseTag("vv1.0.0"));
+    }
 }

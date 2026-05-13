@@ -30,6 +30,19 @@ public class UpdateChecker {
     // api.github.com at the call site.
     private static final Pattern GITHUB_REPO_PATTERN = Pattern.compile("^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$");
 
+    // Strict semver-ish shape for release tags fetched from GitHub. The remote response
+    // is untrusted (could be tampered if the release page is compromised or TLS bypassed),
+    // so we reject anything that wouldn't be a valid version string before it reaches
+    // log lines or version comparison. Closes CWE-117 (log injection) and hardens
+    // parseVersionPart against malformed input.
+    //
+    // Allows: optional leading 'v', 1-4 numeric segments, optional pre-release/build
+    // suffix of [A-Za-z0-9.-] separated by '-' or '+'.
+    // Examples accepted: 1.9.0, v1.9.0, 1.9.0-rc1, 1.0.0+build.123, 1.0.0-SNAPSHOT
+    // Examples rejected: anything with whitespace, control chars, or non-version syntax
+    private static final Pattern RELEASE_TAG_PATTERN = Pattern.compile(
+        "^v?\\d+(\\.\\d+){0,3}([-+][A-Za-z0-9.-]+)?$");
+
     /**
      * Creates a new update checker.
      *
@@ -133,11 +146,14 @@ public class UpdateChecker {
                     final String json = response.toString();
                     final String tagName = extractJsonValue(json, "tag_name");
 
-                    // Remove 'v' prefix if present
-                    if (tagName != null && tagName.startsWith("v")) {
-                        return tagName.substring(1);
+                    final String validated = validateReleaseTag(tagName);
+                    if (validated == null && tagName != null) {
+                        // Tag was present but did not match the strict shape; refuse to
+                        // propagate it so log lines and version compare see only safe input.
+                        plugin.getLogger().warning(
+                            "Discarding malformed release tag from GitHub API; update check skipped.");
                     }
-                    return tagName;
+                    return validated;
                 }
             }
 
@@ -149,6 +165,25 @@ public class UpdateChecker {
             }
         }
         return null;
+    }
+
+    /**
+     * Validates a release tag against the strict {@link #RELEASE_TAG_PATTERN} and
+     * strips an optional leading {@code v}. Returns null for any input that does
+     * not match (including null) so that callers can treat "no valid version" and
+     * "malformed version" uniformly.
+     *
+     * <p>This is the sole barrier between the untrusted GitHub response and the
+     * rest of the plugin (logger, version comparison). Do not bypass it.</p>
+     *
+     * @param tagName Raw tag string from the GitHub API, or null
+     * @return The validated version with any leading {@code v} removed, or null if invalid
+     */
+    private String validateReleaseTag(String tagName) {
+        if (tagName == null || !RELEASE_TAG_PATTERN.matcher(tagName).matches()) {
+            return null;
+        }
+        return tagName.startsWith("v") ? tagName.substring(1) : tagName;
     }
 
     /**
