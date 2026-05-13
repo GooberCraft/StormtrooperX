@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-05-12
+
+### Added
+- Support for the Parched mob (Minecraft 1.21.11+, Mounts of Mayhem). Parched fires Arrows of Weakness with a bow and is treated like other bow users for accuracy nerfing. Gracefully disabled on servers running older versions.
+
+### Changed
+- Tightened Jacoco package line-coverage minimum from 0.50 to 0.60
+
+### Tests
+- New `EntityConfigLoadingTest` (10 tests) covering both `loadEntityConfig` variants, the version-gated `IllegalArgumentException` fallback (the path Parched takes on older servers), and the `displayEntityStatus` Disabled branch
+
+### Dependencies
+- Bump JUnit Jupiter from 5.14.3 to 6.0.3 (major version)
+
+## [1.7.0] - 2026-04-25
+
+### Tests
+- New `BowShootEventTest` (8 tests) covering `onBowShoot()` early-return paths, the zero-velocity guard, speed-preservation invariant, and opt-out/target scenarios
+- New `CommandHandlerTest` (11 tests) covering command dispatch, permission checks, opt-out toggling, and unknown subcommands
+- New `ConfigMigrationTest` (4 tests) covering v2 → v3 migration (`config-version`, database defaults, pool defaults, save)
+- Expand `OptOutManagerTest` with 2 async exception tests verifying `setOptOut()` swallows DB write failures without breaking cache consistency
+- Expand `PluginResourceTest` with an `api-version` assertion
+
+### Dependencies
+- Bump `mysql-connector-j` from 9.6.0 to 9.7.0
+- Bump GitHub Actions: `codecov/codecov-action` v5 → v6, `softprops/action-gh-release` v2 → v3 (Node 20 → 24)
+
+### Breaking
+- **Drop Java 11 support; minimum is now Java 17.** CI matrix now tests Java 17, 21, and 25
+- **Drop Minecraft 1.13–1.17 support; minimum is now Minecraft 1.18.** `plugin.yml` `api-version` updated from `1.13` to `1.18`
+
+## [1.6.3] - 2026-03-17
+
+### Added
+- Automated Modrinth publishing in the release workflow
+- Modrinth downloads badge and installation link in README
+- Stale issue/PR management workflow
+
+### Dependencies
+- Bump `org.jetbrains:annotations` from 26.0.2 to 26.1.0
+- Bump `org.bstats:bstats-bukkit` from 3.1.0 to 3.2.1
+- Bump `mysql-connector-j` from 9.5.0 to 9.6.0
+- Bump `maven-compiler-plugin` from 3.14.1 to 3.15.0
+- Bump `maven-surefire-plugin` from 3.5.4 to 3.5.5
+- Bump `maven-shade-plugin` from 3.6.1 to 3.6.2
+- Bump JUnit Jupiter from 5.12.2 to 5.14.3
+- Bump Mockito (core + junit-jupiter) from 5.20.0 to 5.23.0
+- Bump GitHub Actions: `attest-build-provenance` v2 → v4, `upload-artifact` v5 → v7, `cache` v4 → v5
+- Pin Dependabot to ignore JUnit Jupiter 6.x
+
 ## [1.6.2] - 2025-12-01
 
 ### Performance

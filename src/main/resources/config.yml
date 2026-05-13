@@ -68,6 +68,9 @@ entities:
   bogged:  # 1.21+ only
     enabled: true
     accuracy: 0.7
+  parched:  # 1.21.11+ only
+    enabled: true
+    accuracy: 0.7
 
   # Crossbow Users
   pillager:  # 1.14+ only

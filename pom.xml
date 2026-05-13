@@ -6,7 +6,7 @@
 
     <groupId>com.goobercraft</groupId>
     <artifactId>StormtrooperX</artifactId>
-    <version>1.7.0</version>
+    <version>1.8.0</version>
     <packaging>jar</packaging>
 
     <name>StormtrooperX</name>
@@ -65,7 +65,7 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.50</minimum>
+                                            <minimum>0.60</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
@@ -173,7 +173,7 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>5.14.3</version>
+            <version>6.0.3</version>
             <scope>test</scope>
         </dependency>
         <dependency>

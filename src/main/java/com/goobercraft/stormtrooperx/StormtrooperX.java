@@ -25,7 +25,7 @@ import org.jetbrains.annotations.NotNull;
  * by byteful (https://github.com/byteful/Stormtrooper).
  *
  * Enhancements include:
- * - Support for multiple mob types (Skeleton, Stray, Bogged, Pillager, Piglin)
+ * - Support for multiple mob types (Skeleton, Stray, Bogged, Parched, Pillager, Piglin)
  * - Version compatibility (1.13+)
  * - Arrow and crossbow bolt speed preservation (only direction is modified)
  * - Reload command and improved UX
@@ -150,6 +150,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         loadEntityConfig("skeleton", EntityType.SKELETON);
         loadEntityConfig("stray", EntityType.STRAY);
         loadEntityConfig("bogged", "BOGGED", "1.21+");
+        loadEntityConfig("parched", "PARCHED", "1.21.11+");
         loadEntityConfig("pillager", "PILLAGER", "1.14+");
         loadEntityConfig("piglin", "PIGLIN", "1.16+");
     }
@@ -303,6 +304,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
                 displayEntityStatus(sender, EntityType.SKELETON, "Skeleton");
                 displayEntityStatus(sender, EntityType.STRAY, "Stray");
                 displayEntityStatus(sender, "BOGGED", "Bogged", "1.21+ only");
+                displayEntityStatus(sender, "PARCHED", "Parched", "1.21.11+ only");
 
                 sender.sendMessage("");
                 sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Crossbow Users):");

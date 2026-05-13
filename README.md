@@ -2,7 +2,7 @@
 
 <!-- Keywords: skeleton nerf, mob accuracy plugin, make skeletons miss, reduce skeleton aim,
 survival balance, ranged mob difficulty, pillager accuracy, stray nerf, make mobs miss,
-skeleton aim nerf, balance mob difficulty, reduce mob damage, piglins miss, bogged accuracy -->
+skeleton aim nerf, balance mob difficulty, reduce mob damage, piglins miss, bogged accuracy, parched accuracy -->
 
 [![Build Status](https://github.com/GooberCraft/StormtrooperX/workflows/Build/badge.svg)](https://github.com/GooberCraft/StormtrooperX/actions)
 [![CodeFactor](https://www.codefactor.io/repository/github/goobercraft/stormtrooperx/badge)](https://www.codefactor.io/repository/github/goobercraft/stormtrooperx)
@@ -13,7 +13,7 @@ skeleton aim nerf, balance mob difficulty, reduce mob damage, piglins miss, bogg
 [![Modrinth Downloads](https://img.shields.io/modrinth/dt/stormtrooperx)](https://modrinth.com/plugin/stormtrooperx)
 [![bStats Servers](https://img.shields.io/bstats/servers/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 
-A lightweight Minecraft Spigot plugin that makes ranged mobs miss more often. Reduce the accuracy of Skeletons, Strays, Bogged, Pillagers, and Piglins to balance survival difficulty - because sometimes mobs aim like stormtroopers!
+A lightweight Minecraft Spigot plugin that makes ranged mobs miss more often. Reduce the accuracy of Skeletons, Strays, Bogged, Parched, Pillagers, and Piglins to balance survival difficulty - because sometimes mobs aim like stormtroopers!
 
 > **Note:** This is a refactored and enhanced version of [Stormtrooper](https://github.com/byteful/Stormtrooper) by byteful, with added features including multi-mob support, version compatibility, and improved velocity handling.
 
@@ -37,6 +37,7 @@ A lightweight Minecraft Spigot plugin that makes ranged mobs miss more often. Re
 - Skeleton
 - Stray
 - Bogged (1.21+ only)
+- Parched (1.21.11+ only)
 
 ### Crossbow Users
 - Pillager
@@ -121,6 +122,9 @@ entities:
   bogged:  # 1.21+ only
     enabled: true
     accuracy: 0.7
+  parched:  # 1.21.11+ only
+    enabled: true
+    accuracy: 0.7
 
   # Crossbow Users
   pillager:
@@ -151,6 +155,7 @@ debug: false
 - **skeleton**: Skeleton mobs. Default: enabled, accuracy 0.7
 - **stray**: Stray mobs. Default: enabled, accuracy 0.7
 - **bogged**: Bogged mobs (1.21+ only). Default: enabled, accuracy 0.7
+- **parched**: Parched mobs (1.21.11+ only). Default: enabled, accuracy 0.7
 - **pillager**: Pillager mobs. Default: enabled, accuracy 0.7
 - **piglin**: Piglin mobs. Default: enabled, accuracy 0.7
 
@@ -237,6 +242,7 @@ This repository includes GitHub Actions workflows:
 **Version Notes**:
 - Minecraft 1.18+: Java 17+
 - The Bogged mob type is only available in Minecraft 1.21+. On earlier versions, the plugin will work normally but Bogged will be unavailable.
+- The Parched mob type is only available in Minecraft 1.21.11+ (Mounts of Mayhem). On earlier versions, the plugin will work normally but Parched will be unavailable.
 
 ## Support
 
