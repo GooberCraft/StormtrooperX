@@ -1,12 +1,17 @@
 package com.goobercraft.stormtrooperx;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.List;
+import java.util.Objects;
 import java.util.logging.Logger;
 
 import org.bstats.bukkit.Metrics;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
@@ -15,6 +20,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.util.StringUtil;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
@@ -37,7 +43,7 @@ import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
  * @author GooberCraft
  * @author byteful (original implementation)
  */
-public final class StormtrooperX extends JavaPlugin implements Listener {
+public final class StormtrooperX extends JavaPlugin implements Listener, TabCompleter {
     private final Logger logger = this.getLogger();
 
     private final java.util.Map<EntityType, EntityConfig> entityConfigs = new EnumMap<>(EntityType.class);
@@ -75,6 +81,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
 
         loadConfiguration();
 
+        // Wire up permission-aware tab completion for /stormtrooperx
+        Objects.requireNonNull(getCommand("stormtrooperx"),
+            "Command 'stormtrooperx' missing from plugin.yml").setTabCompleter(this);
+
         // Pick the right scheduler for this server (Folia vs legacy) once at startup
         scheduler = PluginScheduler.create(this);
 
@@ -86,6 +96,9 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         // Initialize opt-out manager with async support and server max players for cache sizing
         optOutManager = new OptOutManager(logger, databaseManager, scheduler, getServer().getMaxPlayers());
         this.getServer().getPluginManager().registerEvents(optOutManager, this);
+
+        // Conditionally register PlaceholderAPI expansion when PAPI is present
+        registerPlaceholderApiExpansion();
 
         this.logger.info("========================================");
         this.logger.info("  StormtrooperX v" + getDescription().getVersion());
@@ -119,6 +132,27 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
         this.logger.info("  StormtrooperX v" + getDescription().getVersion());
         this.logger.info("  Successfully disabled!");
         this.logger.info("========================================");
+    }
+
+    /**
+     * Registers the PlaceholderAPI expansion if PAPI is installed.
+     * Failure to register is logged but never aborts plugin enable — PAPI is a soft dependency.
+     */
+    private void registerPlaceholderApiExpansion() {
+        if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) {
+            return;
+        }
+        try {
+            final boolean registered = new StormtrooperXExpansion(this, optOutManager).register();
+            if (registered) {
+                logger.info("PlaceholderAPI detected; registered %stormtrooperx_optout%");
+            } else {
+                logger.warning("PlaceholderAPI detected but expansion registration returned false");
+            }
+        } catch (Throwable t) {
+            logger.log(java.util.logging.Level.WARNING,
+                "Failed to register PlaceholderAPI expansion; placeholders will be unavailable", t);
+        }
     }
 
     private void checkForUpdates() {
@@ -298,76 +332,224 @@ public final class StormtrooperX extends JavaPlugin implements Listener {
     }
 
     @Override
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
+        if (!command.getName().equalsIgnoreCase("stormtrooperx")) {
+            return Collections.emptyList();
+        }
+
+        if (args.length == 1) {
+            final List<String> available = new ArrayList<>();
+            available.add("help");
+            if (sender.hasPermission("stormtrooperx.admin")) {
+                available.add("reload");
+            }
+            final boolean canSelfOptout = sender instanceof Player && sender.hasPermission("stormtrooperx.optout");
+            final boolean canAdminOptout = sender.hasPermission("stormtrooperx.optout.others");
+            if (canSelfOptout || canAdminOptout) {
+                available.add("optout");
+                available.add("optin");
+            }
+            if (canSelfOptout) {
+                available.add("toggle");
+            }
+
+            final List<String> matches = new ArrayList<>();
+            StringUtil.copyPartialMatches(args[0], available, matches);
+            Collections.sort(matches);
+            return matches;
+        }
+
+        // Second arg: online player names for admin variants of optout/optin
+        if (args.length == 2 && sender.hasPermission("stormtrooperx.optout.others")) {
+            final String sub = args[0].toLowerCase();
+            if (sub.equals("optout") || sub.equals("optin")) {
+                final List<String> names = new ArrayList<>();
+                for (Player online : getServer().getOnlinePlayers()) {
+                    names.add(online.getName());
+                }
+                final List<String> matches = new ArrayList<>();
+                StringUtil.copyPartialMatches(args[1], names, matches);
+                Collections.sort(matches);
+                return matches;
+            }
+        }
+
+        return Collections.emptyList();
+    }
+
+    @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        if (command.getName().equalsIgnoreCase("stormtrooperx")) {
-            if (args.length == 0) {
-                sender.sendMessage(ChatColor.GOLD + "========================================");
-                sender.sendMessage(ChatColor.GOLD + "  StormtrooperX v" + getDescription().getVersion());
-                sender.sendMessage(ChatColor.GOLD + "========================================");
-                sender.sendMessage(ChatColor.YELLOW + "Debug Mode: " + ChatColor.WHITE + (debug ? "Enabled" : "Disabled"));
-                sender.sendMessage("");
-                sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Bow Users):");
-                displayEntityStatus(sender, EntityType.SKELETON, "Skeleton");
-                displayEntityStatus(sender, EntityType.STRAY, "Stray");
-                displayEntityStatus(sender, "BOGGED", "Bogged", "1.21+ only");
-                displayEntityStatus(sender, "PARCHED", "Parched", "1.21.11+ only");
+        if (!command.getName().equalsIgnoreCase("stormtrooperx")) {
+            return false;
+        }
 
-                sender.sendMessage("");
-                sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Crossbow Users):");
-                displayEntityStatus(sender, "PILLAGER", "Pillager", "1.14+ only");
-                displayEntityStatus(sender, "PIGLIN", "Piglin", "1.16+ only");
-
-                sender.sendMessage("");
-                sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.YELLOW + "/stormtrooperx reload" + ChatColor.GRAY + " to reload the configuration.");
-                sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.YELLOW + "/stormtrooperx optout" + ChatColor.GRAY + " to toggle personal opt-out.");
-                return true;
-            }
-
-            // Validate args[0] exists before accessing
-            final String subCommand = args[0].toLowerCase();
-
-            if (subCommand.equals("reload")) {
-                if (!sender.hasPermission("stormtrooperx.reload")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have permission to reload the configuration!");
-                    return true;
-                }
-
-                reloadConfig();
-                loadConfiguration();
-                sender.sendMessage(ChatColor.GREEN + "Configuration reloaded successfully!");
-                return true;
-            }
-
-            if (subCommand.equals("optout") || subCommand.equals("toggle")) {
-                if (!(sender instanceof Player)) {
-                    sender.sendMessage(ChatColor.RED + "Only players can use this command!");
-                    return true;
-                }
-
-                if (!sender.hasPermission("stormtrooperx.optout")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have permission to opt-out!");
-                    return true;
-                }
-
-                final Player player = (Player) sender;
-                final boolean newStatus = optOutManager.toggleOptOut(player.getUniqueId());
-
-                if (newStatus) {
-                    sender.sendMessage(ChatColor.GREEN + "You have opted out of mob accuracy nerfs!");
-                    sender.sendMessage(ChatColor.YELLOW + "Mobs will shoot at you with normal accuracy.");
-                } else {
-                    sender.sendMessage(ChatColor.GREEN + "You have opted back in to mob accuracy nerfs!");
-                    sender.sendMessage(ChatColor.YELLOW + "Mobs will now have reduced accuracy when shooting at you.");
-                }
-                return true;
-            }
-
-            // Unknown subcommand
-            sender.sendMessage(ChatColor.RED + "Unknown command. Use /stormtrooperx for help.");
+        if (args.length == 0) {
+            sendStatus(sender);
             return true;
         }
 
-        return false;
+        final String subCommand = args[0].toLowerCase();
+
+        switch (subCommand) {
+            case "help":
+                sendHelp(sender);
+                return true;
+            case "reload":
+                handleReload(sender);
+                return true;
+            case "optout":
+                if (args.length >= 2) {
+                    handleAdminSet(sender, args[1], true);
+                } else {
+                    handleSelfSet(sender, true);
+                }
+                return true;
+            case "optin":
+                if (args.length >= 2) {
+                    handleAdminSet(sender, args[1], false);
+                } else {
+                    handleSelfSet(sender, false);
+                }
+                return true;
+            case "toggle":
+                handleToggle(sender);
+                return true;
+            default:
+                sender.sendMessage(ChatColor.RED + "Unknown command. Use /stormtrooperx help for a list of commands.");
+                return true;
+        }
+    }
+
+    private void sendStatus(CommandSender sender) {
+        sender.sendMessage(ChatColor.GOLD + "========================================");
+        sender.sendMessage(ChatColor.GOLD + "  StormtrooperX v" + getDescription().getVersion());
+        sender.sendMessage(ChatColor.GOLD + "========================================");
+        sender.sendMessage(ChatColor.YELLOW + "Debug Mode: " + ChatColor.WHITE + (debug ? "Enabled" : "Disabled"));
+        sender.sendMessage("");
+        sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Bow Users):");
+        displayEntityStatus(sender, EntityType.SKELETON, "Skeleton");
+        displayEntityStatus(sender, EntityType.STRAY, "Stray");
+        displayEntityStatus(sender, "BOGGED", "Bogged", "1.21+ only");
+        displayEntityStatus(sender, "PARCHED", "Parched", "1.21.11+ only");
+
+        sender.sendMessage("");
+        sender.sendMessage(ChatColor.YELLOW + "Nerfed Entities (Crossbow Users):");
+        displayEntityStatus(sender, "PILLAGER", "Pillager", "1.14+ only");
+        displayEntityStatus(sender, "PIGLIN", "Piglin", "1.16+ only");
+
+        sender.sendMessage("");
+        sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.YELLOW + "/stormtrooperx help" + ChatColor.GRAY + " to see all commands.");
+    }
+
+    private void sendHelp(CommandSender sender) {
+        sender.sendMessage(ChatColor.GOLD + "========================================");
+        sender.sendMessage(ChatColor.GOLD + "  StormtrooperX Commands");
+        sender.sendMessage(ChatColor.GOLD + "========================================");
+        sender.sendMessage(ChatColor.YELLOW + "/stormtrooperx" + ChatColor.GRAY + " - Show plugin status");
+        sender.sendMessage(ChatColor.YELLOW + "/stormtrooperx help" + ChatColor.GRAY + " - Show this help");
+        if (sender.hasPermission("stormtrooperx.admin")) {
+            sender.sendMessage(ChatColor.YELLOW + "/stormtrooperx reload" + ChatColor.GRAY + " - Reload configuration");
+        }
+        if (sender instanceof Player && sender.hasPermission("stormtrooperx.optout")) {
+            sender.sendMessage(ChatColor.YELLOW + "/stormtrooperx optout" + ChatColor.GRAY + " - Opt yourself out of mob accuracy nerfs");
+            sender.sendMessage(ChatColor.YELLOW + "/stormtrooperx optin" + ChatColor.GRAY + " - Opt yourself back in");
+            sender.sendMessage(ChatColor.YELLOW + "/stormtrooperx toggle" + ChatColor.GRAY + " - Flip your opt-out state");
+        }
+        if (sender.hasPermission("stormtrooperx.optout.others")) {
+            sender.sendMessage(ChatColor.YELLOW + "/stormtrooperx optout <player>" + ChatColor.GRAY + " - Force a player to opt out");
+            sender.sendMessage(ChatColor.YELLOW + "/stormtrooperx optin <player>" + ChatColor.GRAY + " - Force a player to opt in");
+        }
+        sender.sendMessage(ChatColor.GRAY + "Aliases: " + ChatColor.WHITE + "/stx, /stormtrooper");
+    }
+
+    private void handleReload(CommandSender sender) {
+        if (!sender.hasPermission("stormtrooperx.admin")) {
+            sender.sendMessage(ChatColor.RED + "You don't have permission to reload the configuration!");
+            return;
+        }
+        reloadConfig();
+        loadConfiguration();
+        sender.sendMessage(ChatColor.GREEN + "Configuration reloaded successfully!");
+    }
+
+    private void handleSelfSet(CommandSender sender, boolean optedOut) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "Only players can use this command without a target!");
+            return;
+        }
+        if (!sender.hasPermission("stormtrooperx.optout")) {
+            sender.sendMessage(ChatColor.RED + "You don't have permission to opt-out!");
+            return;
+        }
+
+        final Player player = (Player) sender;
+        final boolean current = optOutManager.isOptedOut(player.getUniqueId());
+
+        if (current == optedOut) {
+            sender.sendMessage(ChatColor.YELLOW + (optedOut
+                ? "You are already opted out of mob accuracy nerfs."
+                : "You are already opted in to mob accuracy nerfs."));
+            return;
+        }
+
+        optOutManager.setOptOut(player.getUniqueId(), optedOut);
+        sendOptOutConfirmation(sender, optedOut);
+    }
+
+    private void handleAdminSet(CommandSender sender, String targetName, boolean optedOut) {
+        if (!sender.hasPermission("stormtrooperx.optout.others")) {
+            sender.sendMessage(ChatColor.RED + "You don't have permission to manage other players' opt-out status!");
+            return;
+        }
+
+        final Player target = getServer().getPlayer(targetName);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "Player '" + targetName + "' is not online.");
+            return;
+        }
+
+        final boolean current = optOutManager.isOptedOut(target.getUniqueId());
+        if (current == optedOut) {
+            sender.sendMessage(ChatColor.YELLOW + target.getName() + " is already "
+                + (optedOut ? "opted out." : "opted in."));
+            return;
+        }
+
+        optOutManager.setOptOut(target.getUniqueId(), optedOut);
+        sender.sendMessage(ChatColor.GREEN + target.getName()
+            + (optedOut ? " has been opted out of mob accuracy nerfs."
+                        : " has been opted back in to mob accuracy nerfs."));
+
+        // Tell the target unless the admin targeted themselves
+        if (!target.equals(sender)) {
+            target.sendMessage(ChatColor.YELLOW + "An admin has "
+                + (optedOut ? "opted you out of" : "opted you in to")
+                + " mob accuracy nerfs.");
+        }
+    }
+
+    private void handleToggle(CommandSender sender) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "Only players can use this command!");
+            return;
+        }
+        if (!sender.hasPermission("stormtrooperx.optout")) {
+            sender.sendMessage(ChatColor.RED + "You don't have permission to opt-out!");
+            return;
+        }
+        final Player player = (Player) sender;
+        final boolean newStatus = optOutManager.toggleOptOut(player.getUniqueId());
+        sendOptOutConfirmation(sender, newStatus);
+    }
+
+    private void sendOptOutConfirmation(CommandSender sender, boolean optedOut) {
+        if (optedOut) {
+            sender.sendMessage(ChatColor.GREEN + "You have opted out of mob accuracy nerfs!");
+            sender.sendMessage(ChatColor.YELLOW + "Mobs will shoot at you with normal accuracy.");
+        } else {
+            sender.sendMessage(ChatColor.GREEN + "You have opted back in to mob accuracy nerfs!");
+            sender.sendMessage(ChatColor.YELLOW + "Mobs will now have reduced accuracy when shooting at you.");
+        }
     }
 
     @EventHandler

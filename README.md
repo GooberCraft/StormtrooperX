@@ -8,8 +8,6 @@ skeleton aim nerf, balance mob difficulty, reduce mob damage, piglins miss, bogg
 [![CodeFactor](https://www.codefactor.io/repository/github/goobercraft/stormtrooperx/badge)](https://www.codefactor.io/repository/github/goobercraft/stormtrooperx)
 [![License](https://img.shields.io/github/license/GooberCraft/StormtrooperX)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/GooberCraft/StormtrooperX)](https://github.com/GooberCraft/StormtrooperX/releases)
-[![SpigotMC](https://img.shields.io/spiget/downloads/130400)](https://www.spigotmc.org/resources/stormtrooperx.130400/)
-[![SpigotMC Rating](https://img.shields.io/spiget/rating/130400)](https://www.spigotmc.org/resources/stormtrooperx.130400/)
 [![Modrinth Downloads](https://img.shields.io/modrinth/dt/stormtrooperx)](https://modrinth.com/plugin/stormtrooperx)
 [![bStats Servers](https://img.shields.io/bstats/servers/27782)](https://bstats.org/plugin/bukkit/StormtrooperX/27782)
 
@@ -187,16 +185,36 @@ The plugin automatically migrates old config formats on first load. Your setting
 | Command | Aliases | Description | Permission |
 |---------|---------|-------------|------------|
 | `/stormtrooperx` | `/stx`, `/stormtrooper` | Show plugin info | `stormtrooperx.use` |
-| `/stormtrooperx reload` | - | Reload configuration | `stormtrooperx.reload` |
-| `/stormtrooperx optout` | `toggle` | Toggle mob accuracy nerfs for yourself | `stormtrooperx.optout` |
+| `/stormtrooperx help` | - | Show command list (filtered by permissions) | `stormtrooperx.use` |
+| `/stormtrooperx reload` | - | Reload configuration | `stormtrooperx.admin` |
+| `/stormtrooperx optout` | - | Opt yourself out of mob accuracy nerfs (idempotent) | `stormtrooperx.optout` |
+| `/stormtrooperx optin` | - | Opt yourself back in (idempotent) | `stormtrooperx.optout` |
+| `/stormtrooperx toggle` | - | Flip your own opt-out state | `stormtrooperx.optout` |
+| `/stormtrooperx optout <player>` | - | Force a player to opt out | `stormtrooperx.optout.others` |
+| `/stormtrooperx optin <player>` | - | Force a player to opt back in | `stormtrooperx.optout.others` |
+
+Tab completion is permission-aware: pressing `<Tab>` after `/stormtrooperx ` suggests only the subcommands the sender is allowed to run (`reload` requires `stormtrooperx.admin`), and a second `<Tab>` after `optout`/`optin` suggests online player names for senders with `stormtrooperx.optout.others`.
+
+Players who are opted out receive a chat reminder on join so they know their state persisted from the previous session.
 
 ## Permissions
 
 | Permission | Description | Default |
 |------------|-------------|---------|
-| `stormtrooperx.use` | Access to main command | op |
-| `stormtrooperx.reload` | Reload plugin configuration | op |
-| `stormtrooperx.optout` | Opt-out of mob accuracy nerfs | true |
+| `stormtrooperx.admin` | Required for `/stormtrooperx reload`; also grants `stormtrooperx.optout.others` | op |
+| `stormtrooperx.use` | Access to main command | true |
+| `stormtrooperx.optout` | Opt yourself out of mob accuracy nerfs | true |
+| `stormtrooperx.optout.others` | Manage other players' opt-out status | op |
+
+## PlaceholderAPI
+
+When [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/) is installed, StormtrooperX registers an expansion with the following placeholders:
+
+| Placeholder | Value |
+|-------------|-------|
+| `%stormtrooperx_optout%` | `true` if the player has opted out, otherwise `false` |
+
+The expansion is registered automatically at plugin enable and persists across `/papi reload`.
 
 ## Building from Source
 

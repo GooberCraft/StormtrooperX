@@ -214,10 +214,12 @@ StormtrooperX/
 │   ├── main/
 │   │   ├── java/
 │   │   │   └── com/goobercraft/stormtrooperx/
-│   │   │       ├── StormtrooperX.java      # Main plugin class, event handler, command dispatch
-│   │   │       ├── DatabaseManager.java    # H2 (embedded) and MySQL (HikariCP) persistence
-│   │   │       ├── OptOutManager.java      # Cached, async opt-out facade over DatabaseManager
-│   │   │       └── UpdateChecker.java      # GitHub release checker
+│   │   │       ├── StormtrooperX.java           # Main plugin class, event handler, command dispatch
+│   │   │       ├── DatabaseManager.java         # H2 (embedded) and MySQL (HikariCP) persistence
+│   │   │       ├── OptOutManager.java           # Cached, async opt-out facade over DatabaseManager
+│   │   │       ├── StormtrooperXExpansion.java  # PlaceholderAPI expansion (registered if PAPI is present)
+│   │   │       ├── UpdateChecker.java           # GitHub release checker
+│   │   │       └── scheduler/                   # PluginScheduler abstraction (Folia + legacy Bukkit)
 │   │   └── resources/
 │   │       ├── config.yml                  # Default configuration
 │   │       └── plugin.yml                  # Plugin metadata

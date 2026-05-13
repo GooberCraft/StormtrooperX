@@ -7,6 +7,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.bukkit.ChatColor;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -172,8 +174,9 @@ public class OptOutManager implements Listener {
      */
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        final UUID playerUUID = event.getPlayer().getUniqueId();
-        final String playerName = event.getPlayer().getName();
+        final Player player = event.getPlayer();
+        final UUID playerUUID = player.getUniqueId();
+        final String playerName = player.getName();
 
         // Query database asynchronously to avoid blocking main thread during player join
         scheduler.runAsync(() -> {
@@ -185,6 +188,17 @@ public class OptOutManager implements Listener {
                     // Add to cache (thread-safe ConcurrentHashMap)
                     optedOutCache.add(playerUUID);
                     logger.fine("Player " + playerName + " joined (opted out, added to cache)");
+
+                    // Notify the player on the global thread (Folia-safe). isOnline check
+                    // because the async query may finish after the player disconnects.
+                    scheduler.runGlobal(() -> {
+                        if (player.isOnline()) {
+                            player.sendMessage(ChatColor.GRAY
+                                + "Reminder: you are opted out of StormtrooperX mob accuracy nerfs. Use "
+                                + ChatColor.YELLOW + "/stormtrooperx optin"
+                                + ChatColor.GRAY + " to opt back in.");
+                        }
+                    });
                 } else {
                     logger.fine("Player " + playerName + " joined (not opted out)");
                 }

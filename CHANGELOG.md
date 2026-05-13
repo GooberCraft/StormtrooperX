@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Permission-aware tab completion for `/stormtrooperx`. The first argument completes to only the subcommands the sender is allowed to run, and the second argument of `optout`/`optin` completes to online player names for admins with `stormtrooperx.optout.others`.
+- `/stormtrooperx help` subcommand that lists the commands the sender is permitted to run.
+- `/stormtrooperx optin` as the idempotent counterpart to `optout`. `optout` and `optin` are now idempotent (always set the named state); `toggle` keeps the flip behavior. Running an already-set command reports "you are already opted out/in" rather than performing a no-op write.
+- Admin opt-out management: `/stormtrooperx optout <player>` and `/stormtrooperx optin <player>` for online players, gated by the new `stormtrooperx.optout.others` permission. Targets are notified that an admin changed their state.
+- `stormtrooperx.admin` permission required for `/stormtrooperx reload`; also grants `stormtrooperx.optout.others` via permission children. The previously-planned separate `stormtrooperx.reload` permission node has been folded into `stormtrooperx.admin` — there is no granular reload-only permission.
+- Join-time reminder: players who are opted out now receive a chat message after their state loads, so they remember the preference persists across sessions.
+- PlaceholderAPI soft dependency. When PAPI is installed, `%stormtrooperx_optout%` resolves to `true`/`false` for the requesting player. The expansion persists across `/papi reload`.
+
+### Changed
+- `stormtrooperx.use` default changed from `op` to `true` so non-op players can actually invoke `/stormtrooperx optout` (which is itself `default: true`). Previously the command itself was gated at the Bukkit layer, making the `optout` permission unreachable for non-ops.
+- `/stormtrooperx optout` no longer toggles. It now always sets the player to opted-out (idempotent). Use `/stormtrooperx toggle` for the previous flip behavior; `toggle` was already an alias for `optout` so existing muscle memory still works.
+
 ## [1.9.0] - 2026-05-13
 
 ### Added

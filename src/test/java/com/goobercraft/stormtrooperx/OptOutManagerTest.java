@@ -269,6 +269,41 @@ public class OptOutManagerTest {
     }
 
     @Test
+    public void testOnPlayerJoin_OptedOut_SendsReminderMessage() {
+        when(joinEvent.getPlayer()).thenReturn(player);
+        when(databaseManager.isOptedOut(testUUID)).thenReturn(true);
+        when(player.isOnline()).thenReturn(true);
+
+        optOutManager.onPlayerJoin(joinEvent);
+
+        verify(player).sendMessage(contains("opted out of StormtrooperX"));
+    }
+
+    @Test
+    public void testOnPlayerJoin_NotOptedOut_DoesNotSendMessage() {
+        when(joinEvent.getPlayer()).thenReturn(player);
+        when(databaseManager.isOptedOut(testUUID)).thenReturn(false);
+
+        optOutManager.onPlayerJoin(joinEvent);
+
+        verify(player, never()).sendMessage(anyString());
+    }
+
+    @Test
+    public void testOnPlayerJoin_OptedOut_PlayerDisconnectedBeforeNotice_DoesNotSend() {
+        // Simulates the player disconnecting between the async DB load and the global-thread send
+        when(joinEvent.getPlayer()).thenReturn(player);
+        when(databaseManager.isOptedOut(testUUID)).thenReturn(true);
+        when(player.isOnline()).thenReturn(false);
+
+        optOutManager.onPlayerJoin(joinEvent);
+
+        verify(player, never()).sendMessage(anyString());
+        // Cache was still populated
+        assertTrue(optOutManager.isOptedOut(testUUID));
+    }
+
+    @Test
     public void testOnPlayerJoin_DatabaseException() {
         // Setup: Database throws exception
         when(joinEvent.getPlayer()).thenReturn(player);
