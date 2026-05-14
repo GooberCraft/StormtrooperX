@@ -46,11 +46,23 @@ import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
 public final class StormtrooperX extends JavaPlugin implements Listener, TabCompleter {
     private final Logger logger = this.getLogger();
 
-    private final java.util.Map<EntityType, EntityConfig> entityConfigs = new EnumMap<>(EntityType.class);
-    private boolean debug = false;
+    // volatile + atomic-swap pattern: the event handler runs on Folia regional
+    // threads while reload runs on the global thread. We never mutate a
+    // published map; loadConfiguration() builds a fresh EnumMap and assigns
+    // it as a single reference write, so readers always see a consistent
+    // snapshot without locks.
+    private volatile java.util.Map<EntityType, EntityConfig> entityConfigs = new EnumMap<>(EntityType.class);
+    private volatile boolean debug = false;
     private DatabaseManager databaseManager;
     private OptOutManager optOutManager;
     private PluginScheduler scheduler;
+
+    // Pre-sorted subcommand pools keyed by required permission. Sorted at class
+    // load so per-keystroke tab completion can skip Collections.sort.
+    private static final List<String> TAB_PUBLIC = List.of("help");
+    private static final List<String> TAB_ADMIN = List.of("reload");
+    private static final List<String> TAB_OPTOUT = List.of("optin", "optout");
+    private static final List<String> TAB_TOGGLE = List.of("toggle");
 
     /**
      * Configuration for a specific entity type.
@@ -177,8 +189,6 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     }
 
     private void loadConfiguration() {
-        entityConfigs.clear();
-
         // Check config version and migrate if needed
         final int configVersion = getConfig().getInt("config-version", 2);
         if (configVersion == 2) {
@@ -189,13 +199,16 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
 
         debug = getConfig().getBoolean("debug", false);
 
-        // Load per-entity configurations
-        loadEntityConfig("skeleton", EntityType.SKELETON);
-        loadEntityConfig("stray", EntityType.STRAY);
-        loadEntityConfig("bogged", "BOGGED", "1.21+");
-        loadEntityConfig("parched", "PARCHED", "1.21.11+");
-        loadEntityConfig("pillager", "PILLAGER", "1.14+");
-        loadEntityConfig("piglin", "PIGLIN", "1.16+");
+        // Build a fresh map and atomically publish it at the end so Folia
+        // regional event threads never observe a partially populated state.
+        final java.util.Map<EntityType, EntityConfig> staging = new EnumMap<>(EntityType.class);
+        loadEntityConfig(staging, "skeleton", EntityType.SKELETON);
+        loadEntityConfig(staging, "stray", EntityType.STRAY);
+        loadEntityConfig(staging, "bogged", "BOGGED", "1.21+");
+        loadEntityConfig(staging, "parched", "PARCHED", "1.21.11+");
+        loadEntityConfig(staging, "pillager", "PILLAGER", "1.14+");
+        loadEntityConfig(staging, "piglin", "PIGLIN", "1.16+");
+        entityConfigs = staging;
     }
 
     /**
@@ -229,12 +242,13 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     }
 
     /**
-     * Loads configuration for a specific entity type.
+     * Loads configuration for a specific entity type into the supplied map.
      *
+     * @param target The map to populate (the in-flight reload staging map)
      * @param configKey The key in the config file
      * @param entityType The EntityType enum value
      */
-    private void loadEntityConfig(String configKey, EntityType entityType) {
+    private void loadEntityConfig(java.util.Map<EntityType, EntityConfig> target, String configKey, EntityType entityType) {
         final String path = "entities." + configKey;
 
         if (!getConfig().contains(path)) {
@@ -250,7 +264,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
         }
 
         if (enabled) {
-            entityConfigs.put(entityType, new EntityConfig(true, accuracy));
+            target.put(entityType, new EntityConfig(true, accuracy));
             this.logger.info(String.format("Entity '%s' will be nerfed! (accuracy: %.2f)", capitalize(configKey), accuracy));
         }
     }
@@ -258,11 +272,12 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     /**
      * Loads configuration for an entity type that may not exist in all versions.
      *
+     * @param target The map to populate (the in-flight reload staging map)
      * @param configKey The key in the config file
      * @param entityTypeName The name of the EntityType enum value
      * @param minVersion The minimum Minecraft version required
      */
-    private void loadEntityConfig(String configKey, String entityTypeName, String minVersion) {
+    private void loadEntityConfig(java.util.Map<EntityType, EntityConfig> target, String configKey, String entityTypeName, String minVersion) {
         final String path = "entities." + configKey;
 
         if (!getConfig().contains(path)) {
@@ -284,7 +299,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
                 this.logger.warning(String.format("Entity '%s' has out-of-range accuracy value: %.2f (valid range: 0.0-1.0). Value will be clamped at runtime.", capitalize(configKey), accuracy));
             }
 
-            entityConfigs.put(entityType, new EntityConfig(true, accuracy));
+            target.put(entityType, new EntityConfig(true, accuracy));
             this.logger.info(String.format("Entity '%s' will be nerfed! (accuracy: %.2f)", capitalize(configKey), accuracy));
         } catch (IllegalArgumentException e) {
             this.logger.info(String.format("Entity '%s' is not available in this Minecraft version (%s required)", capitalize(configKey), minVersion));
@@ -341,24 +356,28 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
         }
 
         if (args.length == 1) {
-            final List<String> available = new ArrayList<>();
-            available.add("help");
-            if (sender.hasPermission("stormtrooperx.admin")) {
-                available.add("reload");
-            }
+            // Probe permissions in the same order as the previous implementation
+            // (admin -> optout -> optout.others) so existing strict-stubbed tests
+            // observe an unchanged call sequence. Output is assembled alphabetically
+            // so we can skip Collections.sort.
+            final boolean canAdmin = sender.hasPermission("stormtrooperx.admin");
             final boolean canSelfOptout = sender instanceof Player && sender.hasPermission("stormtrooperx.optout");
             final boolean canAdminOptout = sender.hasPermission("stormtrooperx.optout.others");
+
+            final List<String> available = new ArrayList<>(5);
+            available.addAll(TAB_PUBLIC); // help
             if (canSelfOptout || canAdminOptout) {
-                available.add("optout");
-                available.add("optin");
+                available.addAll(TAB_OPTOUT); // optin, optout
+            }
+            if (canAdmin) {
+                available.addAll(TAB_ADMIN); // reload
             }
             if (canSelfOptout) {
-                available.add("toggle");
+                available.addAll(TAB_TOGGLE); // toggle
             }
 
             final List<String> matches = new ArrayList<>();
             StringUtil.copyPartialMatches(args[0], available, matches);
-            Collections.sort(matches);
             return matches;
         }
 
@@ -370,9 +389,9 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
                 for (Player online : getServer().getOnlinePlayers()) {
                     names.add(online.getName());
                 }
+                Collections.sort(names);
                 final List<String> matches = new ArrayList<>();
                 StringUtil.copyPartialMatches(args[1], names, matches);
-                Collections.sort(matches);
                 return matches;
             }
         }
@@ -476,7 +495,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     }
 
     private void handleSelfSet(CommandSender sender, boolean optedOut) {
-        if (!(sender instanceof Player)) {
+        if (!(sender instanceof Player player)) {
             sender.sendMessage(ChatColor.RED + "Only players can use this command without a target!");
             return;
         }
@@ -485,7 +504,6 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
             return;
         }
 
-        final Player player = (Player) sender;
         final boolean current = optOutManager.isOptedOut(player.getUniqueId());
 
         if (current == optedOut) {
@@ -532,7 +550,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     }
 
     private void handleToggle(CommandSender sender) {
-        if (!(sender instanceof Player)) {
+        if (!(sender instanceof Player player)) {
             sender.sendMessage(ChatColor.RED + "Only players can use this command!");
             return;
         }
@@ -540,7 +558,6 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
             sender.sendMessage(ChatColor.RED + "You don't have permission to opt-out!");
             return;
         }
-        final Player player = (Player) sender;
         final boolean newStatus = optOutManager.toggleOptOut(player.getUniqueId());
         sendOptOutConfirmation(sender, newStatus);
     }
@@ -555,28 +572,29 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
         }
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onBowShoot(EntityShootBowEvent event) {
-        if (debug) {
-            logger.info("EntityShootBowEvent -- " + event.getEntity().getType() + ": " + event.getProjectile().getVelocity());
-        }
-
-        // Get entity configuration
-        final EntityType entityType = event.getEntity().getType();
+        // Cache once: hot path, accessed multiple times.
+        final org.bukkit.entity.Entity shooter = event.getEntity();
+        final EntityType entityType = shooter.getType();
+        // volatile read of the published snapshot — Folia regional thread safe.
         final EntityConfig config = entityConfigs.get(entityType);
 
-        // Only process entities that are configured and enabled
+        // Only process entities that are configured and enabled.
+        // Cheap nullity check first means non-configured shots cost almost nothing.
         if (config == null || !config.isEnabled()) {
             return;
         }
 
+        if (debug) {
+            logger.info("EntityShootBowEvent -- " + entityType + ": " + event.getProjectile().getVelocity());
+        }
+
         // Check if the target player has opted out
-        if (event.getEntity() instanceof Mob) {
-            final Mob mob = (Mob) event.getEntity();
+        if (shooter instanceof Mob mob) {
             final LivingEntity target = mob.getTarget();
 
-            if (target instanceof Player) {
-                final Player player = (Player) target;
+            if (target instanceof Player player) {
                 if (optOutManager.isOptedOut(player.getUniqueId())) {
                     if (debug) {
                         logger.info("Skipping nerf for " + player.getName() + " (opted out)");
@@ -586,9 +604,12 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
             }
         }
 
-        // Get projectile velocity and guard against zero-length (normalize would NaN)
-        final Vector velocity = event.getProjectile().getVelocity();
-        if (velocity.length() == 0) {
+        // Cache projectile reference (one Bukkit call instead of two).
+        // getProjectile() returns Entity in this Spigot API version.
+        final org.bukkit.entity.Entity projectile = event.getProjectile();
+        final Vector velocity = projectile.getVelocity();
+        // lengthSquared() avoids an unnecessary sqrt; equals zero iff length is zero.
+        if (velocity.lengthSquared() == 0) {
             if (debug) {
                 logger.info("Skipping projectile with zero velocity from " + entityType);
             }
@@ -598,10 +619,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
         // Delegate the speed-preserving direction perturbation to the pure helper.
         // accuracy is already clamped to [0.0, 1.0] in EntityConfig constructor.
         ProjectileNerf.perturb(velocity, config.getAccuracy(), Vector::getRandom);
-        event.getProjectile().setVelocity(velocity);
+        projectile.setVelocity(velocity);
 
         if (debug) {
-            logger.info("Projectile from '" + event.getEntity().getType() + "' launched with modified velocity '" + velocity +
+            logger.info("Projectile from '" + entityType + "' launched with modified velocity '" + velocity +
                 "' (accuracy: " + String.format("%.2f", config.getAccuracy()) + ")");
         }
     }

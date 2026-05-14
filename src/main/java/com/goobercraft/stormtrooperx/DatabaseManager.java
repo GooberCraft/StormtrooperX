@@ -23,6 +23,8 @@ public class DatabaseManager {
 
     private final Logger logger;
     private final String databaseType;
+    // Cached once at construction so the hot DB paths skip repeated string compares.
+    private final boolean isH2;
     private final File dataFolder;
     private final ConfigurationSection mysqlConfig;
 
@@ -69,6 +71,7 @@ public class DatabaseManager {
         this.logger = logger;
         this.dataFolder = dataFolder;
         this.databaseType = databaseType.toLowerCase();
+        this.isH2 = this.databaseType.equals("h2");
         this.mysqlConfig = mysqlConfig;
     }
 
@@ -77,7 +80,7 @@ public class DatabaseManager {
      */
     public void initialize() {
         try {
-            if (databaseType.equals("h2")) {
+            if (isH2) {
                 initializeH2();
             } else {
                 initializeMySQL();
@@ -240,10 +243,24 @@ public class DatabaseManager {
                 poolConfig.getLong("max-lifetime", 1800000), "max-lifetime", 30000, 1800000));
         }
 
-        // Connection pool properties
+        // MySQL Connector/J + HikariCP performance recommendations
+        // (see https://github.com/brettwooldridge/HikariCP/wiki/MySQL-Configuration)
+        // - Prepared statement caching: client- and server-side
         config.addDataSourceProperty("cachePrepStmts", "true");
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+        config.addDataSourceProperty("useServerPrepStmts", "true");
+        // - Avoid round-trips for session state the driver already knows
+        config.addDataSourceProperty("useLocalSessionState", "true");
+        // - Batched insert/update rewriting (no-op when batches aren't used, free win)
+        config.addDataSourceProperty("rewriteBatchedStatements", "true");
+        // - Cache result set + server config metadata to skip redundant queries
+        config.addDataSourceProperty("cacheResultSetMetadata", "true");
+        config.addDataSourceProperty("cacheServerConfiguration", "true");
+        // - Suppress unnecessary SET autocommit calls when driver state matches
+        config.addDataSourceProperty("elideSetAutoCommits", "true");
+        // - Skip per-statement timestamp tracking; HikariCP itself tracks pool stats
+        config.addDataSourceProperty("maintainTimeStats", "false");
 
         hikariDataSource = new HikariDataSource(config);
     }
@@ -252,7 +269,7 @@ public class DatabaseManager {
      * Gets a connection from either H2 or MySQL pool.
      */
     private Connection getConnection() throws SQLException {
-        if (databaseType.equals("h2")) {
+        if (isH2) {
             return h2Connection;
         } else {
             return hikariDataSource.getConnection();
@@ -263,7 +280,7 @@ public class DatabaseManager {
      * Closes a connection. For H2, does nothing (single connection). For MySQL, returns to pool.
      */
     private void closeConnection(Connection connection) {
-        if (databaseType.equals("mysql") && connection != null) {
+        if (!isH2 && connection != null) {
             try {
                 connection.close(); // Returns connection to HikariCP pool
             } catch (SQLException e) {
@@ -306,12 +323,12 @@ public class DatabaseManager {
             return false;
         }
 
-        if (databaseType.equals("h2") && h2Connection == null) {
+        if (isH2 && h2Connection == null) {
             logger.warning("H2 database connection not initialized");
             return false;
         }
 
-        if (databaseType.equals("mysql") && hikariDataSource == null) {
+        if (!isH2 && hikariDataSource == null) {
             logger.warning("MySQL database connection pool not initialized");
             return false;
         }
@@ -329,7 +346,7 @@ public class DatabaseManager {
         if (!validateDatabaseOperation(playerUUID)) {
             return false;
         }
-        if ("h2".equals(databaseType)) {
+        if (isH2) {
             synchronized (h2Lock) {
                 return isOptedOutInternal(playerUUID);
             }
@@ -371,7 +388,7 @@ public class DatabaseManager {
         if (!validateDatabaseOperation(playerUUID)) {
             return;
         }
-        if ("h2".equals(databaseType)) {
+        if (isH2) {
             synchronized (h2Lock) {
                 setOptOutInternal(playerUUID, optedOut);
             }
@@ -383,7 +400,7 @@ public class DatabaseManager {
     private void setOptOutInternal(UUID playerUUID, boolean optedOut) {
         // Use appropriate upsert syntax for database type
         final String upsertSQL;
-        if (databaseType.equals("h2")) {
+        if (isH2) {
             // H2 syntax (MySQL mode)
             upsertSQL = "MERGE INTO player_optouts (uuid, opted_out, updated_at) KEY(uuid) VALUES (?, ?, CURRENT_TIMESTAMP)";
         } else {
@@ -428,14 +445,14 @@ public class DatabaseManager {
      * Closes the database connection or pool.
      */
     public void close() {
-        if (databaseType.equals("h2") && h2Connection != null) {
+        if (isH2 && h2Connection != null) {
             try {
                 h2Connection.close();
                 logger.info("H2 database connection closed");
             } catch (SQLException e) {
                 logger.log(Level.WARNING, "Failed to close H2 database connection", e);
             }
-        } else if (databaseType.equals("mysql") && hikariDataSource != null) {
+        } else if (!isH2 && hikariDataSource != null) {
             hikariDataSource.close();
             logger.info("MySQL connection pool closed");
         }

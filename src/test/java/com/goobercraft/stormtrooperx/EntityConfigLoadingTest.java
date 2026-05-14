@@ -67,7 +67,7 @@ class EntityConfigLoadingTest {
         void pathMissing() {
             when(mockConfig.contains("entities.skeleton")).thenReturn(false);
 
-            TestSupport.invokePrivate(plugin, "loadEntityConfig", "skeleton", EntityType.SKELETON);
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", entityConfigs, "skeleton", EntityType.SKELETON);
 
             assertThat(entityConfigs).isEmpty();
         }
@@ -79,7 +79,7 @@ class EntityConfigLoadingTest {
             when(mockConfig.getBoolean("entities.skeleton.enabled", true)).thenReturn(true);
             when(mockConfig.getDouble("entities.skeleton.accuracy", 0.7)).thenReturn(0.5);
 
-            TestSupport.invokePrivate(plugin, "loadEntityConfig", "skeleton", EntityType.SKELETON);
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", entityConfigs, "skeleton", EntityType.SKELETON);
 
             final StormtrooperX.EntityConfig cfg = entityConfigs.get(EntityType.SKELETON);
             assertThat(cfg).isNotNull();
@@ -94,7 +94,7 @@ class EntityConfigLoadingTest {
             when(mockConfig.getBoolean("entities.skeleton.enabled", true)).thenReturn(false);
             when(mockConfig.getDouble("entities.skeleton.accuracy", 0.7)).thenReturn(0.7);
 
-            TestSupport.invokePrivate(plugin, "loadEntityConfig", "skeleton", EntityType.SKELETON);
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", entityConfigs, "skeleton", EntityType.SKELETON);
 
             assertThat(entityConfigs).doesNotContainKey(EntityType.SKELETON);
         }
@@ -106,7 +106,7 @@ class EntityConfigLoadingTest {
             when(mockConfig.getBoolean("entities.skeleton.enabled", true)).thenReturn(true);
             when(mockConfig.getDouble("entities.skeleton.accuracy", 0.7)).thenReturn(2.5);
 
-            TestSupport.invokePrivate(plugin, "loadEntityConfig", "skeleton", EntityType.SKELETON);
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", entityConfigs, "skeleton", EntityType.SKELETON);
 
             assertThat(entityConfigs.get(EntityType.SKELETON).getAccuracy()).isEqualTo(1.0);
         }
@@ -123,7 +123,7 @@ class EntityConfigLoadingTest {
         void pathMissing() {
             when(mockConfig.contains("entities.bogged")).thenReturn(false);
 
-            TestSupport.invokePrivate(plugin, "loadEntityConfig", "bogged", "BOGGED", "1.21+");
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", entityConfigs, "bogged", "BOGGED", "1.21+");
 
             assertThat(entityConfigs).isEmpty();
         }
@@ -134,7 +134,7 @@ class EntityConfigLoadingTest {
             when(mockConfig.contains("entities.bogged")).thenReturn(true);
             when(mockConfig.getBoolean("entities.bogged.enabled", true)).thenReturn(false);
 
-            TestSupport.invokePrivate(plugin, "loadEntityConfig", "bogged", "BOGGED", "1.21+");
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", entityConfigs, "bogged", "BOGGED", "1.21+");
 
             assertThat(entityConfigs).isEmpty();
             verify(mockConfig, never()).getDouble(anyString(), anyDouble());
@@ -147,7 +147,7 @@ class EntityConfigLoadingTest {
             when(mockConfig.getBoolean("entities.pillager.enabled", true)).thenReturn(true);
             when(mockConfig.getDouble("entities.pillager.accuracy", 0.7)).thenReturn(0.8);
 
-            TestSupport.invokePrivate(plugin, "loadEntityConfig", "pillager", "PILLAGER", "1.14+");
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", entityConfigs, "pillager", "PILLAGER", "1.14+");
 
             final StormtrooperX.EntityConfig cfg = entityConfigs.get(EntityType.PILLAGER);
             assertThat(cfg).isNotNull();
@@ -162,7 +162,7 @@ class EntityConfigLoadingTest {
             when(mockConfig.getBoolean("entities.fictional.enabled", true)).thenReturn(true);
 
             // Same path Parched takes on a 1.21.10 server.
-            TestSupport.invokePrivate(plugin, "loadEntityConfig", "fictional", "NOT_A_REAL_ENTITY_TYPE_XYZ", "9.99+");
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", entityConfigs, "fictional", "NOT_A_REAL_ENTITY_TYPE_XYZ", "9.99+");
 
             assertThat(entityConfigs).isEmpty();
         }
@@ -174,7 +174,7 @@ class EntityConfigLoadingTest {
             when(mockConfig.getBoolean("entities.pillager.enabled", true)).thenReturn(true);
             when(mockConfig.getDouble("entities.pillager.accuracy", 0.7)).thenReturn(-0.5);
 
-            TestSupport.invokePrivate(plugin, "loadEntityConfig", "pillager", "PILLAGER", "1.14+");
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", entityConfigs, "pillager", "PILLAGER", "1.14+");
 
             assertThat(entityConfigs.get(EntityType.PILLAGER).getAccuracy()).isEqualTo(0.0);
         }
