@@ -7,59 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Extracted the projectile-perturbation math out of `StormtrooperX.onBowShoot` into a package-private `ProjectileNerf.perturb(Vector, double, Supplier<Vector>)` helper. The random source is now injectable, making the speed-preserving math testable without a Bukkit event mock. Behavior is unchanged.
-- `EntityConfig` widened from `private` to package-private so tests can construct it directly instead of through reflection.
-
-### Tests
-- Added AssertJ (`assertj-core 3.27.3`) as a test dependency for fluent assertions and richer failure messages.
-- Added a Jacoco package-level **branch coverage** rule (`BRANCH COVEREDRATIO >= 0.50`) alongside the existing line-coverage rule. Current coverage: 72% line / 75% branch.
-- `.github/workflows/build.yml` and `release.yml` now run `mvn clean verify` instead of `mvn clean package` so the Jacoco gate is actually enforced in CI (`jacoco:check` is bound to the `verify` phase by default — the previous `package` runs never invoked it).
-- Reorganized large test classes with JUnit 5 `@Nested` groups and `@DisplayName` for readable reports (Surefire, IDE).
-- Converted obvious repeat-shape tests in `UpdateCheckerTest`, `DatabaseManagerMySQLTest`, and `StormtrooperXTest` to `@ParameterizedTest` (`@CsvSource` / `@ValueSource` / `@NullAndEmptySource`).
-- New `ProjectileNerfTest` for the extracted pure function — verifies speed preservation, zero-velocity guard, mutation semantics, and accuracy clamping behavior with a deterministic random source.
-- New `support/` test package: `TestSupport` (reflective field injection + private-method invocation helper) and `InlinePluginScheduler` (shared inline scheduler stub) replace duplicated boilerplate across four test classes.
-- Added `src/test/resources/fixtures/config-v2.yml` and `config-v3.yml`; `ConfigMigrationTest` now exercises real YAML load -> migrate -> assert in addition to the existing mock-based verifications.
-- Added missing logger verification on `OptOutManager` exception paths so silently-swallowed DB failures will fail the test.
-- New `UpdateCheckerTest` cases (13 total) covering `validateReleaseTag` accept and reject sets — semver shape with optional `v` prefix, pre-release / build suffixes, 1–4 segment counts, and rejection of null/empty input, CR/LF injection, whitespace, HTML and shell metacharacters, 5+ segments, and non-numeric leading segments.
-
 ### Added
-- Permission-aware tab completion for `/stormtrooperx`. The first argument completes to only the subcommands the sender is allowed to run, and the second argument of `optout`/`optin` completes to online player names for admins with `stormtrooperx.optout.others`.
-- `/stormtrooperx help` subcommand that lists the commands the sender is permitted to run.
-- `/stormtrooperx optin` as the idempotent counterpart to `optout`. `optout` and `optin` are now idempotent (always set the named state); `toggle` keeps the flip behavior. Running an already-set command reports "you are already opted out/in" rather than performing a no-op write.
-- Admin opt-out management: `/stormtrooperx optout <player>` and `/stormtrooperx optin <player>` for online players, gated by the new `stormtrooperx.optout.others` permission. Targets are notified that an admin changed their state.
-- `stormtrooperx.admin` permission required for `/stormtrooperx reload`; also grants `stormtrooperx.optout.others` via permission children. The previously-planned separate `stormtrooperx.reload` permission node has been folded into `stormtrooperx.admin` — there is no granular reload-only permission.
-- Join-time reminder: players who are opted out now receive a chat message after their state loads, so they remember the preference persists across sessions.
-- PlaceholderAPI soft dependency. When PAPI is installed, `%stormtrooperx_optout%` resolves to `true`/`false` for the requesting player. The expansion persists across `/papi reload`.
+- Permission-aware tab completion for `/stormtrooperx`: the first argument completes to only the subcommands the sender may run; the second argument of `optout`/`optin` completes to online player names for admins with `stormtrooperx.optout.others`.
+- `/stormtrooperx help` subcommand, listing only the commands the sender is permitted to run.
+- `/stormtrooperx optin` as the idempotent counterpart to `optout`. `optout`/`optin` now always set the named state (reporting "already opted out/in" instead of a no-op write); `toggle` keeps the flip behavior.
+- Admin opt-out management: `/stormtrooperx optout|optin <player>` for online players, gated by the new `stormtrooperx.optout.others` permission. Targets are notified of the change.
+- `stormtrooperx.admin` permission, required for `/stormtrooperx reload` and granting `stormtrooperx.optout.others` via permission children.
+- Join-time reminder: opted-out players get a chat message once their state loads.
+- PlaceholderAPI soft dependency — `%stormtrooperx_optout%` resolves to `true`/`false` for the requesting player; the expansion persists across `/papi reload`.
 
 ### Changed
-- `stormtrooperx.use` default changed from `op` to `true` so non-op players can actually invoke `/stormtrooperx optout` (which is itself `default: true`). Previously the command itself was gated at the Bukkit layer, making the `optout` permission unreachable for non-ops.
-- `/stormtrooperx optout` no longer toggles. It now always sets the player to opted-out (idempotent). Use `/stormtrooperx toggle` for the previous flip behavior; `toggle` was already an alias for `optout` so existing muscle memory still works.
-- `onBowShoot` now declares `@EventHandler(ignoreCancelled = true)` so the projectile-perturbation work is skipped when an upstream plugin (region protection, anti-cheat, etc.) cancels `EntityShootBowEvent`.
-- HikariCP MySQL pool now sets the MySQL Connector/J performance properties recommended by the HikariCP wiki: `useServerPrepStmts`, `useLocalSessionState`, `rewriteBatchedStatements`, `cacheResultSetMetadata`, `cacheServerConfiguration`, `elideSetAutoCommits`, and `maintainTimeStats=false`. No config-file change required; the existing `cachePrepStmts` / `prepStmtCacheSize` / `prepStmtCacheSqlLimit` are kept.
-- Internal hot-path micro-optimizations: zero-velocity guard in `onBowShoot` uses `lengthSquared()` to skip an unnecessary `sqrt`; the projectile reference is cached for its two uses; `DatabaseManager` caches a `boolean isH2` field at construction to replace per-operation `String#equals` against `databaseType`; tab completion assembles candidates from pre-sorted permission-tier pools and drops `Collections.sort`; pattern-matching `instanceof` replaces the explicit `Mob` / `Player` / `Player`-from-`CommandSender` casts.
+- Extracted the projectile-perturbation math into a package-private `ProjectileNerf.perturb(Vector, double, Supplier<Vector>)` helper with an injectable random source. Behavior unchanged.
+- `EntityConfig` widened from `private` to package-private for direct test construction.
+- `stormtrooperx.use` default changed from `op` to `true` so non-op players can reach `/stormtrooperx optout` (itself `default: true`).
+- `/stormtrooperx optout` no longer toggles — it always sets opted-out (idempotent). Use `/stormtrooperx toggle` for the flip behavior.
+- `onBowShoot` declares `@EventHandler(ignoreCancelled = true)`, skipping perturbation when an upstream plugin cancels `EntityShootBowEvent`.
+- HikariCP MySQL pool sets the Connector/J performance properties recommended by the HikariCP wiki (`useServerPrepStmts`, `useLocalSessionState`, `rewriteBatchedStatements`, `cacheResultSetMetadata`, `cacheServerConfiguration`, `elideSetAutoCommits`, `maintainTimeStats=false`). No config change.
+- Hot-path micro-optimizations: `lengthSquared()` zero-velocity guard, cached projectile reference, cached `isH2` boolean, pre-sorted tab-completion pools, pattern-matching `instanceof`.
 
 ### Fixed
-- Folia regional-thread safety on `/stormtrooperx reload`. `entityConfigs` and `debug` are now `volatile`, and `loadConfiguration` builds a fresh `EnumMap` and assigns it as a single reference write rather than mutating the published map. Previously the `clear()` + per-entity `put()` sequence created a window where a Folia regional thread handling `EntityShootBowEvent` could observe a partially populated map and either skip nerfing or read stale state.
+- Folia regional-thread safety on `/stormtrooperx reload`: `entityConfigs` and `debug` are now `volatile`, and `loadConfiguration` publishes a fresh `EnumMap` in a single reference write instead of mutating the live map (which could expose a partially populated map to a regional `EntityShootBowEvent` thread).
 
 ### Security
-- Hardened the `UpdateChecker` release-tag flow against CWE-117 log injection. Release tags returned by the GitHub Releases API are now validated against a strict `^v?\d+(\.\d+){0,3}([-+][A-Za-z0-9.-]+)?$` shape by a new `validateReleaseTag` barrier before they can reach any logger or `compareVersions`. A tampered release page (or a successful TLS interception) can no longer forge log entries via CR/LF in `tag_name`; malformed tags are dropped at the source and the update check logs a generic warning instead of the offending value. As a side effect, `parseVersionPart` is no longer reachable with malformed input.
-- Closed the `java/log-injection` CodeQL alert on `StormtrooperX.checkForUpdates`. The callback logged `currentVersion` / `latestVersion` directly; both are shape-validated upstream — `latestVersion` via `UpdateChecker.validateReleaseTag`, `currentVersion` from `plugin.yml` — but the guard sits across the `UpdateChecker` callback boundary where CodeQL cannot trace it. A new `sanitizeForLog` helper reduces the value to `[A-Za-z0-9._+-]` at the logging sink itself: an allowlist `replaceAll` (the negated-character-class form CodeQL's `java/log-injection` query recognizes as a sanitizer — a `[\r\n]` denylist is *not* recognized), which drops CR/LF and any other unexpected character. (The earlier CHANGELOG wording crediting `validateReleaseTag` with closing this alert was inaccurate — that change sanitized the source side, not the `StormtrooperX` sink.)
-- `DatabaseManager` MySQL `properties` are now validated against a curated allowlist (`SAFE_MYSQL_PROPERTY_KEYS`) before being appended to the JDBC URL, and values are URL-encoded. Closes a parameter-smuggling vector where an admin (or a compromised config) could enable Connector/J flags with a known RCE / file-read history (`allowLoadLocalInfile`, `autoDeserialize`, `queryInterceptors`, `propertiesTransform`, `allowMultiQueries`, etc.) by including them as a property key, or by embedding `&key=value` in another property's value. Allowlisted keys cover SSL/TLS, time/encoding, network behavior, and the `cachePrepStmts` family. Unsupported keys now throw `IllegalArgumentException` at `initialize()` with a pointer to file an issue if the allowlist needs widening.
-- Defense-in-depth Connector/J defaults: `allowLoadLocalInfile=false`, `allowUrlInLocalInfile=false`, `autoDeserialize=false`, and `allowPublicKeyRetrieval=false` are now set as HikariCP `dataSourceProperties` so a future Connector/J default change cannot silently re-enable them. URL-side params win on conflict, but the new allowlist already prevents these keys from appearing there.
-- Player names echoed by the offline branch of `/stormtrooperx optout|optin <player>` are sanitized through a new `sanitizeNameForEcho` helper that replaces ASCII control characters and the Bukkit color section sign (`§`) with `?` and caps the echoed name at Mojang's 16-character username limit. Closes a low-severity injection where a hostile admin on an offline-mode server could supply a "name" containing CR/LF or color codes to inject styled content into another admin's chat. The online-target branch echoes `Player#getName()`, which is server-validated, and is unchanged.
-- Bumped `org.assertj:assertj-core` from `3.27.3` to `3.27.7` to close Dependabot alert #3 (GHSA-rqfh-9r24-8c9r / CVE-2026-24400 — XXE in the `isXmlEqualTo` assertion). Test-scope only, and the project does not use `isXmlEqualTo`, so there was no exploitable path; the bump keeps the dependency on a non-flagged version.
+- Hardened the `UpdateChecker` release-tag flow against CWE-117 log injection. GitHub release tags are validated against `^v?\d+(\.\d+){0,3}([-+][A-Za-z0-9.-]+)?$` by a new `validateReleaseTag` barrier before reaching any logger or `compareVersions`; malformed tags are dropped at the source.
+- Closed the `java/log-injection` CodeQL alert on `StormtrooperX.checkForUpdates`. A new `sanitizeForLog` helper reduces the logged version strings to `[A-Za-z0-9._+-]` at the sink — an allowlist `replaceAll`, the negated-character-class form CodeQL recognizes as a sanitizer (a `[\r\n]` denylist is not).
+- `DatabaseManager` validates MySQL `properties` against an allowlist (`SAFE_MYSQL_PROPERTY_KEYS`) and URL-encodes values, closing a parameter-smuggling vector that could otherwise enable Connector/J flags with RCE / file-read history (`allowLoadLocalInfile`, `autoDeserialize`, `queryInterceptors`, ...). Unsupported keys throw `IllegalArgumentException` at `initialize()`.
+- Defense-in-depth Connector/J defaults set as HikariCP `dataSourceProperties`: `allowLoadLocalInfile`, `allowUrlInLocalInfile`, `autoDeserialize`, and `allowPublicKeyRetrieval` are all forced `false`.
+- Player names echoed by the offline branch of `/stormtrooperx optout|optin <player>` are sanitized via a new `sanitizeNameForEcho` helper (strips control chars and the `§` color sign, caps at 16 chars), closing a low-severity chat-injection vector on offline-mode servers.
+- Pinned the AssertJ test dependency to `assertj-core` 3.27.7, clear of CVE-2026-24400 (GHSA-rqfh-9r24-8c9r — XXE in `isXmlEqualTo`; test-scope only and the method is unused).
 
 ### Documentation
-- `OptOutManager#isOptedOut` and `StormtrooperXExpansion`'s class Javadoc now explicitly document the **online-only** semantics of the cache and the `%stormtrooperx_optout%` placeholder: offline players resolve to `false` even if their persisted state is "opted out". Mirrored in the README PlaceholderAPI section. Behavior is unchanged; this only documents an intentional but previously-implicit invariant.
-- `DatabaseManager.initializeH2` has a Javadoc warning against switching to `AUTO_SERVER=TRUE` or H2 server mode without re-evaluating the hardcoded `sa`/empty credentials — they are only safe in the embedded, file-backed mode used today.
-- `UpdateChecker.extractJsonValue` has a Javadoc warning that it is single-field-only (the `tag_name` field, which is independently validated by `RELEASE_TAG_PATTERN`). Anything beyond `tag_name` requires a real JSON parser.
+- `OptOutManager#isOptedOut`, `StormtrooperXExpansion`, and the README PlaceholderAPI section now document the **online-only** semantics of `%stormtrooperx_optout%`: offline players resolve to `false` regardless of persisted state. Behavior unchanged.
+- `DatabaseManager.initializeH2` Javadoc warns against `AUTO_SERVER=TRUE` / H2 server mode without revisiting the hardcoded `sa`/empty credentials.
+- `UpdateChecker.extractJsonValue` Javadoc warns it is `tag_name`-only; other fields need a real JSON parser.
+
+### Tests
+- Added AssertJ (`assertj-core`) for fluent assertions and richer failure messages.
+- Added a Jacoco package-level branch-coverage rule (`BRANCH COVEREDRATIO >= 0.50`) alongside the line-coverage rule. Current: 72% line / 75% branch.
+- `build.yml` and `release.yml` run `mvn clean verify` instead of `package`, so the Jacoco gate (bound to `verify`) is actually enforced in CI.
+- Reorganized large test classes with `@Nested` / `@DisplayName` groups and converted repeat-shape cases to `@ParameterizedTest`.
+- New `support/` test package: `TestSupport` (reflective field/method access) and `InlinePluginScheduler` (shared inline scheduler), replacing duplicated boilerplate.
+- New `ProjectileNerfTest` for the extracted pure function — speed preservation, zero-velocity guard, mutation semantics, accuracy clamping.
+- New YAML fixtures (`config-v2.yml`, `config-v3.yml`); `ConfigMigrationTest` exercises a real load → migrate → assert.
+- Added logger verification on `OptOutManager` exception paths so silently-swallowed DB failures fail the test.
+- Expanded `UpdateCheckerTest` to cover `validateReleaseTag` accept/reject sets (semver shapes, CR/LF injection, metacharacters, segment counts).
 
 ### Build
-- New CycloneDX SBOM (`cyclonedx-maven-plugin` 2.9.1) bound to the `verify` phase. Outputs `target/bom.xml` and `target/bom.json` documenting the shaded dependency tree (bStats, H2, HikariCP, MySQL Connector/J). The release workflow now uploads both alongside the JAR.
-- `.github/workflows/release.yml` actions are now pinned to commit SHAs (with `# vX.Y.Z` trailers) instead of mutable major tags. The release job holds `id-token` + `attestations: write` scope, so a force-pushed tag or compromised action — particularly the third-party `softprops/action-gh-release` and `cloudnode-pro/modrinth-publish` — could otherwise inject code into the signing path. All five actions were already on their current major version; no functional change. Dependabot's `github-actions` ecosystem reads the trailer and bumps both SHA and comment via a reviewed PR.
-- `DatabaseManager` now uses `Locale.ROOT` for the `databaseType` lowercase fold (avoids the Turkish `I`/`İ` round-trip that could change `MYSQL` under `tr_TR`).
-- Removed the deprecated `reviewers:` field from `.github/dependabot.yml`. Sole maintainer; CODEOWNERS is unnecessary.
+- Pinned all `release.yml` actions to commit SHAs (with `# vX.Y.Z` trailers) instead of mutable major tags — the release job holds `id-token`/`attestations: write` scope. No functional change; Dependabot keeps the pins current.
+- Added a CycloneDX SBOM (`cyclonedx-maven-plugin`) on the `verify` phase; `release.yml` uploads `bom.xml`/`bom.json` alongside the JAR.
+- `DatabaseManager` uses `Locale.ROOT` for the `databaseType` case fold.
+- Removed the deprecated `reviewers:` field from `dependabot.yml`.
 
 ## [1.9.0] - 2026-05-13
 
@@ -320,11 +317,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detailed logging for enabled entities
 - Version-safe handling of newer mob types (Bogged gracefully disabled on versions < 1.21)
 - Arrow speed preservation (only direction is modified, not velocity magnitude)
-
-## [Unreleased]
-
-### Planned
-- Support for projectile-throwing mobs (Drowned with tridents, Witches, Ghasts, Blazes, etc.)
 
 ---
 
