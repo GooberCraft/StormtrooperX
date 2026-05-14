@@ -50,6 +50,44 @@ class StormtrooperXTest {
     }
 
     @Nested
+    @DisplayName("sanitizeForLog(String) — CWE-117 log-injection guard")
+    class SanitizeForLog {
+
+        @Test
+        @DisplayName("strips a CR used to forge a log line")
+        void stripsCarriageReturn() {
+            assertThat(StormtrooperX.sanitizeForLog("1.9.0\rINFO forged"))
+                .isEqualTo("1.9.0INFO forged");
+        }
+
+        @Test
+        @DisplayName("strips an LF used to forge a log line")
+        void stripsLineFeed() {
+            assertThat(StormtrooperX.sanitizeForLog("1.9.0\nWARNING fake"))
+                .isEqualTo("1.9.0WARNING fake");
+        }
+
+        @Test
+        @DisplayName("strips every CR/LF in a multi-line injection payload")
+        void stripsAllLineBreaks() {
+            assertThat(StormtrooperX.sanitizeForLog("1.9.0\r\n\r\nx"))
+                .isEqualTo("1.9.0x");
+        }
+
+        @ParameterizedTest(name = "leaves clean version [{0}] unchanged")
+        @ValueSource(strings = {"1.9.0", "v2.0.0-rc1", "1.0.0+build.123", ""})
+        void cleanValuesUnchanged(String input) {
+            assertThat(StormtrooperX.sanitizeForLog(input)).isEqualTo(input);
+        }
+
+        @Test
+        @DisplayName("null becomes the literal \"null\" (no NPE at the sink)")
+        void nullBecomesLiteral() {
+            assertThat(StormtrooperX.sanitizeForLog(null)).isEqualTo("null");
+        }
+    }
+
+    @Nested
     @DisplayName("EntityConfig — enabled flag")
     class EntityConfigEnabled {
 

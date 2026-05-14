@@ -173,17 +173,24 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     private void checkForUpdates() {
         final UpdateChecker updateChecker = new UpdateChecker(this, scheduler, "GooberCraft/StormtrooperX");
         updateChecker.checkForUpdates((comparison, currentVersion, latestVersion) -> {
+            // Sink-side CWE-117 guard. latestVersion is already shape-validated
+            // by UpdateChecker.validateReleaseTag and currentVersion comes from
+            // plugin.yml, but the sanitizer lives across a callback boundary so
+            // static analysis cannot trace it to this sink. sanitizeForLog keeps
+            // the guard local and is cheap defense-in-depth.
+            final String safeCurrent = sanitizeForLog(currentVersion);
+            final String safeLatest = sanitizeForLog(latestVersion);
             if (comparison < 0) {
                 this.logger.info("========================================");
                 this.logger.warning("  A new update is available!");
-                this.logger.warning("  Current version: " + currentVersion);
-                this.logger.warning("  Latest version: " + latestVersion);
+                this.logger.warning("  Current version: " + safeCurrent);
+                this.logger.warning("  Latest version: " + safeLatest);
                 this.logger.warning("  Download: https://github.com/GooberCraft/StormtrooperX/releases");
                 this.logger.info("========================================");
             } else if (comparison == 0) {
                 this.logger.info("You are running the latest version!");
             } else {
-                this.logger.info("You are running a development version (" + currentVersion + ")");
+                this.logger.info("You are running a development version (" + safeCurrent + ")");
             }
         });
     }
@@ -331,6 +338,27 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
             }
         }
         return out.toString();
+    }
+
+    /**
+     * Strips CR and LF from a value before it is written to a log line, so a
+     * value can neither forge nor split log entries (CWE-117 log injection).
+     *
+     * <p>Used by {@link #checkForUpdates()} for the version strings passed to
+     * the {@code UpdateChecker} callback. The regex literal deliberately
+     * contains {@code \r} and {@code \n} so static analysis recognizes it as a
+     * log-injection sanitizer at the sink — the upstream
+     * {@code UpdateChecker.validateReleaseTag} guard cannot be traced across
+     * the callback boundary.</p>
+     *
+     * @param value the raw value, may be null
+     * @return the value with CR/LF removed, or the string {@code "null"} if null
+     */
+    static String sanitizeForLog(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return value.replaceAll("[\r\n]", "");
     }
 
     /**
