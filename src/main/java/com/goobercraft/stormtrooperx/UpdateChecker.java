@@ -6,6 +6,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
 
@@ -124,7 +125,8 @@ public class UpdateChecker {
                 // The runtime check below will still protect against large responses
 
                 // Use try-with-resources to ensure proper resource cleanup
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
                     final StringBuilder response = new StringBuilder();
                     String line;
                     int totalChars = 0;
@@ -187,7 +189,17 @@ public class UpdateChecker {
     }
 
     /**
-     * Simple JSON value extractor (avoids needing JSON library dependency).
+     * Simple JSON value extractor (avoids needing a JSON library dependency).
+     *
+     * <p><b>Single-field use only.</b> This is a hand-rolled {@code indexOf}
+     * parser intended exclusively for the GitHub Releases {@code tag_name}
+     * field, whose value is independently constrained by
+     * {@link #RELEASE_TAG_PATTERN}. It does <em>not</em> handle escaped
+     * quotes ({@code \"}), unicode escapes, nested objects, or whitespace
+     * around the colon. Do not extend this method to parse arbitrary fields
+     * (e.g. {@code body}, {@code name}, {@code html_url}) — those can contain
+     * attacker-influenced content where the lack of escape handling becomes
+     * a real bug. If you need another field, add a real JSON parser.</p>
      *
      * @param json The JSON string
      * @param key The key to extract

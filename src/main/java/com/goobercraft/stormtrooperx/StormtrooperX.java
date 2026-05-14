@@ -307,6 +307,33 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     }
 
     /**
+     * Strips characters that should never appear in echoed player names: ASCII
+     * control characters (CR/LF/tab), the Bukkit color section sign
+     * ({@code §}), and anything past 16 chars (Mojang's username limit).
+     * Replaces the first three with {@code ?} so the echoed name is visually
+     * distinguishable from a legitimate one.
+     *
+     * <p>On offline-mode servers a client can supply arbitrary bytes as a
+     * "name", so command args are not safe to echo unfiltered.</p>
+     */
+    static String sanitizeNameForEcho(String input) {
+        if (input == null) {
+            return "";
+        }
+        final int max = Math.min(input.length(), 16);
+        final StringBuilder out = new StringBuilder(max);
+        for (int i = 0; i < max; i++) {
+            final char c = input.charAt(i);
+            if (c == ChatColor.COLOR_CHAR || Character.isISOControl(c)) {
+                out.append('?');
+            } else {
+                out.append(c);
+            }
+        }
+        return out.toString();
+    }
+
+    /**
      * Capitalizes the first letter of a string.
      */
     private static String capitalize(String str) {
@@ -525,7 +552,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
 
         final Player target = getServer().getPlayer(targetName);
         if (target == null) {
-            sender.sendMessage(ChatColor.RED + "Player '" + targetName + "' is not online.");
+            // Sanitize the echoed name: command args bypass Mojang's name regex
+            // (especially on offline-mode servers) and could carry control chars
+            // or section signs into another admin's chat.
+            sender.sendMessage(ChatColor.RED + "Player '" + sanitizeNameForEcho(targetName) + "' is not online.");
             return;
         }
 

@@ -10,8 +10,13 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
  *
  * <p>Available placeholders:</p>
  * <ul>
- *   <li>{@code %stormtrooperx_optout%} — "true" or "false" indicating whether the
- *       player has opted out of mob accuracy nerfs.</li>
+ *   <li>{@code %stormtrooperx_optout%} — {@code "true"} or {@code "false"}
+ *       indicating whether the player has opted out of mob accuracy nerfs.
+ *       <b>Online-only:</b> backed by {@link OptOutManager#isOptedOut(java.util.UUID)},
+ *       which only consults the in-memory cache populated for online players.
+ *       Offline players will resolve to {@code "false"} even if their
+ *       persisted state is "opted out". Tools that need persisted state for
+ *       offline players should query the database directly.</li>
  * </ul>
  *
  * <p>Registered conditionally at plugin enable when PlaceholderAPI is present.

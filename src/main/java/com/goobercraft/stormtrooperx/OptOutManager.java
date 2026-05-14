@@ -88,13 +88,25 @@ public class OptOutManager implements Listener {
      * Checks if a player has opted out.
      * Uses in-memory cache for fast O(1) lookups.
      *
+     * <p><b>Online-only semantics.</b> This method only consults the in-memory
+     * cache, which is populated on {@link PlayerJoinEvent} and cleared on
+     * {@link PlayerQuitEvent}. For an offline player it returns {@code false}
+     * regardless of their persisted opt-out state. This is intentional:
+     * the cache exists to keep the {@code EntityShootBowEvent} hot path
+     * lock-free and zero-I/O, and a mob can only target an online player
+     * anyway. Callers that need the persisted state for an offline player
+     * (admin tooling, batch scripts) should query
+     * {@link DatabaseManager#isOptedOut(UUID)} directly off the main thread.
+     * The PAPI {@code %stormtrooperx_optout%} placeholder inherits this
+     * limitation; see {@link StormtrooperXExpansion#onRequest}.</p>
+     *
      * <p><b>Thread Safety:</b> This method is thread-safe and lock-free.
      * It can be safely called from the main game thread during event handling
      * or from async threads. The underlying {@link ConcurrentHashMap} provides
      * thread-safe read operations without blocking.</p>
      *
      * @param playerUUID Player's UUID
-     * @return true if opted out, false otherwise
+     * @return true if the player is online and cached as opted out, false otherwise
      */
     public boolean isOptedOut(UUID playerUUID) {
         if (playerUUID == null) {

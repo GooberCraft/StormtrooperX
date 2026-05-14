@@ -276,6 +276,147 @@ class DatabaseManagerMySQLTest {
     }
 
     // -------------------------------------------------------------------------
+    // JDBC properties allowlist + value validation
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("validateMySQLProperty(key, value)")
+    class ValidateMysqlProperty {
+
+        private final DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
+
+        @ParameterizedTest(name = "accepts allowlisted key: {0}")
+        @ValueSource(strings = {
+            "useSSL", "requireSSL", "verifyServerCertificate", "sslMode",
+            "serverTimezone", "characterEncoding", "connectionCollation",
+            "connectTimeout", "socketTimeout", "tcpKeepAlive",
+            "zeroDateTimeBehavior", "cachePrepStmts"
+        })
+        void allowlistedKeysPass(String key) {
+            // Should not throw for any reasonable value.
+            manager.validateMySQLProperty(key, "true");
+        }
+
+        @Test
+        @DisplayName("'sessionVariables' is intentionally not allowlisted")
+        void sessionVariablesNotAllowlisted() {
+            assertThatThrownBy(() -> manager.validateMySQLProperty(
+                    "sessionVariables", "sql_mode='STRICT_TRANS_TABLES'"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported MySQL JDBC property");
+        }
+
+        @ParameterizedTest(name = "rejects dangerous key: {0}")
+        @ValueSource(strings = {
+            "allowLoadLocalInfile", "allowUrlInLocalInfile", "autoDeserialize",
+            "queryInterceptors", "statementInterceptors", "propertiesTransform",
+            "allowMultiQueries", "allowPublicKeyRetrieval", "useConfigs",
+            "exceptionInterceptors", "clientInfoProvider", "detectCustomCollations"
+        })
+        void knownDangerousKeysAreRejected(String key) {
+            assertThatThrownBy(() -> manager.validateMySQLProperty(key, "true"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported MySQL JDBC property")
+                .hasMessageContaining(key);
+        }
+
+        @Test
+        @DisplayName("rejects null key")
+        void nullKey() {
+            assertThatThrownBy(() -> manager.validateMySQLProperty(null, "x"))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("rejects null value")
+        void nullValue() {
+            assertThatThrownBy(() -> manager.validateMySQLProperty("useSSL", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("null value");
+        }
+
+        @ParameterizedTest(name = "rejects value containing forbidden char: {0}")
+        @ValueSource(strings = {
+            "true&allowLoadLocalInfile=true",
+            "true=false",
+            "true\nautoDeserialize=true",
+            "true\rfoo",
+            "true bar"
+        })
+        void valueWithSmugglingCharsIsRejected(String value) {
+            assertThatThrownBy(() -> manager.validateMySQLProperty("useSSL", value))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("forbidden character");
+        }
+
+        @Test
+        @DisplayName("accepts values with structurally-valid special chars (URL-encoded downstream)")
+        void encodableSpecialCharsAccepted() {
+            // '/' in a zone id, ',' in a protocol list, '+' / ':' in other
+            // values — all legal; the URL encoder handles them at the call site.
+            // Only '&', '=', and control chars are rejected.
+            manager.validateMySQLProperty("serverTimezone", "America/New_York");
+            manager.validateMySQLProperty("enabledTLSProtocols", "TLSv1.2,TLSv1.3");
+        }
+    }
+
+    @Nested
+    @DisplayName("MySQL initialize() — properties allowlist enforcement")
+    class PropertiesAllowlistEnforcement {
+
+        @Test
+        @DisplayName("allowlisted properties shape a valid URL (no throw)")
+        void allowlistedPropertiesAccepted() {
+            final ConfigurationSection cfg = defaultMysqlConfig();
+            final ConfigurationSection props = mock(ConfigurationSection.class);
+            when(cfg.getConfigurationSection("properties")).thenReturn(props);
+            when(props.getKeys(false)).thenReturn(new HashSet<>(Arrays.asList(
+                "useSSL", "requireSSL", "verifyServerCertificate", "serverTimezone")));
+            when(props.getString("useSSL")).thenReturn("true");
+            when(props.getString("requireSSL")).thenReturn("true");
+            when(props.getString("verifyServerCertificate")).thenReturn("true");
+            when(props.getString("serverTimezone")).thenReturn("UTC");
+
+            // initialize() will throw on the actual JDBC connect (no MySQL server),
+            // but the allowlist + URL build runs before that; we just need it to
+            // not throw IllegalArgumentException from validation.
+            final DatabaseManager mgr = new DatabaseManager(logger, tempDir, "mysql", cfg);
+            assertThatThrownBy(mgr::initialize)
+                .isNotInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("rejects RCE-history property smuggled via the properties section")
+        void rejectsAutoDeserializeProperty() {
+            final ConfigurationSection cfg = defaultMysqlConfig();
+            final ConfigurationSection props = mock(ConfigurationSection.class);
+            when(cfg.getConfigurationSection("properties")).thenReturn(props);
+            when(props.getKeys(false)).thenReturn(new HashSet<>(Arrays.asList("autoDeserialize")));
+            when(props.getString("autoDeserialize")).thenReturn("true");
+
+            final DatabaseManager mgr = new DatabaseManager(logger, tempDir, "mysql", cfg);
+            assertThatThrownBy(mgr::initialize)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("autoDeserialize");
+        }
+
+        @Test
+        @DisplayName("rejects parameter smuggling via '&' in a property value")
+        void rejectsParameterSmugglingInValue() {
+            final ConfigurationSection cfg = defaultMysqlConfig();
+            final ConfigurationSection props = mock(ConfigurationSection.class);
+            when(cfg.getConfigurationSection("properties")).thenReturn(props);
+            when(props.getKeys(false)).thenReturn(new HashSet<>(Arrays.asList("useSSL")));
+            when(props.getString("useSSL")).thenReturn("true&allowLoadLocalInfile=true");
+
+            final DatabaseManager mgr = new DatabaseManager(logger, tempDir, "mysql", cfg);
+            assertThatThrownBy(mgr::initialize)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("forbidden character");
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Pool-size validator clamping
     // -------------------------------------------------------------------------
 

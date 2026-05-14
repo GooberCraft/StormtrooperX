@@ -5,12 +5,16 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.io.File;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -42,6 +46,44 @@ public class DatabaseManager {
     private HikariDataSource hikariDataSource;
 
     /**
+     * Allowlist of MySQL Connector/J properties admins may set under
+     * {@code database.mysql.properties} in {@code config.yml}.
+     *
+     * <p>Restricted to TLS, time/encoding, network, and a handful of safe
+     * behavior flags. Properties with a known RCE / file-read history
+     * (e.g. {@code allowLoadLocalInfile}, {@code autoDeserialize},
+     * {@code queryInterceptors}, {@code propertiesTransform}) are deliberately
+     * absent and cannot be enabled from config. If a future use case needs
+     * a property that is not on this list, prefer adding it here over
+     * removing the allowlist.</p>
+     */
+    static final Set<String> SAFE_MYSQL_PROPERTY_KEYS = Set.of(
+        // SSL/TLS
+        "useSSL", "requireSSL", "verifyServerCertificate", "sslMode",
+        "trustCertificateKeyStoreUrl", "trustCertificateKeyStoreType",
+        "trustCertificateKeyStorePassword",
+        "clientCertificateKeyStoreUrl", "clientCertificateKeyStoreType",
+        "clientCertificateKeyStorePassword",
+        "enabledSSLCipherSuites", "enabledTLSProtocols",
+        // Time and character handling
+        "serverTimezone", "connectionTimeZone", "characterEncoding",
+        "connectionCollation", "useUnicode",
+        // Network behavior
+        "connectTimeout", "socketTimeout", "tcpKeepAlive", "tcpNoDelay",
+        "autoReconnect", "autoReconnectForPools", "maxReconnects", "initialTimeout",
+        // Misc safe behavior
+        "zeroDateTimeBehavior",
+        // Statement caching (callers may override the in-code defaults if needed)
+        "cachePrepStmts", "prepStmtCacheSize", "prepStmtCacheSqlLimit", "useServerPrepStmts"
+    );
+    // Note: 'sessionVariables' is intentionally NOT allowlisted. Its value
+    // inherently contains '=' (e.g. sessionVariables=sql_mode='...'), which
+    // collides with the strict no-'='/no-'&' value check below. It is also the
+    // most powerful property (arbitrary SET at connect time). If a concrete
+    // need arises, add it with a dedicated value validator rather than
+    // loosening the shared one.
+
+    /**
      * Creates a new database manager.
      *
      * @param logger Logger instance (must not be null)
@@ -70,7 +112,10 @@ public class DatabaseManager {
 
         this.logger = logger;
         this.dataFolder = dataFolder;
-        this.databaseType = databaseType.toLowerCase();
+        // Locale.ROOT keeps the case fold deterministic across server JVM locales
+        // (notably Turkish 'I'/'İ', which would otherwise change "MYSQL"
+        // unexpectedly under tr_TR).
+        this.databaseType = databaseType.toLowerCase(Locale.ROOT);
         this.isH2 = this.databaseType.equals("h2");
         this.mysqlConfig = mysqlConfig;
     }
@@ -98,15 +143,21 @@ public class DatabaseManager {
     }
 
     /**
-     * Initializes H2 embedded database connection.
+     * Initializes H2 in **embedded** mode — file-backed, in-process, no TCP listener.
+     *
+     * <p><b>Do not</b> add {@code AUTO_SERVER=TRUE} or switch to {@code jdbc:h2:tcp://...}
+     * without re-evaluating credentials: the hardcoded {@code sa}/empty password
+     * is only safe because there is no network exposure in embedded mode.
+     * H2 also exposes {@code CREATE ALIAS}/Java function bindings that have a
+     * long RCE history; the plugin avoids them by only running fixed,
+     * parameterized statements.</p>
      */
     private void initializeH2() throws ClassNotFoundException, SQLException {
         // Load H2 driver
         Class.forName("org.h2.Driver");
 
-        // Create connection with minimal security options for local embedded database:
-        // - FILE_LOCK=SOCKET: Prevents concurrent access issues (not security, but data integrity)
-        // - MODE=MySQL: MySQL compatibility mode for familiar syntax
+        // - FILE_LOCK=SOCKET: prevents concurrent access on the file (data integrity)
+        // - MODE=MySQL: MySQL grammar compatibility for familiar syntax
         final File databaseFile = new File(dataFolder, "players");
         final String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + ";MODE=MySQL;FILE_LOCK=SOCKET";
         h2Connection = DriverManager.getConnection(url, "sa", "");
@@ -145,6 +196,42 @@ public class DatabaseManager {
         if (username == null || !username.matches("^[a-zA-Z0-9_-]+$")) {
             throw new IllegalArgumentException("Invalid MySQL username: " + username +
                 ". Username must contain only alphanumeric characters, underscores, and hyphens.");
+        }
+    }
+
+    /**
+     * Validates a single user-supplied JDBC property key/value pair before it
+     * is appended to the JDBC URL.
+     *
+     * <p>Defense-in-depth against a misconfigured (or compromised) admin
+     * enabling Connector/J flags with known RCE / file-read history. Keys
+     * must appear in {@link #SAFE_MYSQL_PROPERTY_KEYS}; values must not
+     * contain characters that could smuggle additional URL parameters
+     * ({@code &}, {@code =}, CR, LF, control chars). Allowed values are
+     * subsequently URL-encoded at the call site so structurally-valid
+     * special characters (e.g. {@code +} in a timezone) do not break URL
+     * parsing.</p>
+     *
+     * @throws IllegalArgumentException if the key is not allowlisted, the
+     *         value is null, or the value contains a forbidden character
+     */
+    void validateMySQLProperty(String key, String value) {
+        if (key == null || !SAFE_MYSQL_PROPERTY_KEYS.contains(key)) {
+            throw new IllegalArgumentException("Unsupported MySQL JDBC property: '" + key
+                + "'. Allowed keys: " + SAFE_MYSQL_PROPERTY_KEYS
+                + ". If you need a property not on this list, please open an issue at "
+                + "https://github.com/GooberCraft/StormtrooperX/issues so the allowlist can be reviewed.");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("MySQL JDBC property '" + key + "' has null value");
+        }
+        for (int i = 0; i < value.length(); i++) {
+            final char c = value.charAt(i);
+            if (c == '&' || c == '=' || Character.isISOControl(c)) {
+                throw new IllegalArgumentException("MySQL JDBC property '" + key
+                    + "' contains a forbidden character (control char, '&', or '='). "
+                    + "Values must not smuggle additional URL parameters.");
+            }
         }
     }
 
@@ -204,16 +291,22 @@ public class DatabaseManager {
         final StringBuilder jdbcUrl = new StringBuilder();
         jdbcUrl.append("jdbc:mysql://").append(host).append(":").append(port).append("/").append(database);
 
-        // Append custom connection properties if provided
+        // Append custom connection properties if provided. Keys are checked
+        // against an allowlist and values are URL-encoded so a malicious value
+        // cannot smuggle additional parameters or enable Connector/J features
+        // with a known RCE / file-read history (allowLoadLocalInfile,
+        // autoDeserialize, queryInterceptors, ...).
         final ConfigurationSection properties = mysqlConfig.getConfigurationSection("properties");
         if (properties != null && !properties.getKeys(false).isEmpty()) {
             jdbcUrl.append("?");
             boolean first = true;
             for (String key : properties.getKeys(false)) {
+                final String value = properties.getString(key);
+                validateMySQLProperty(key, value);
                 if (!first) {
                     jdbcUrl.append("&");
                 }
-                jdbcUrl.append(key).append("=").append(properties.getString(key));
+                jdbcUrl.append(key).append("=").append(URLEncoder.encode(value, StandardCharsets.UTF_8));
                 first = false;
             }
         }
@@ -242,6 +335,22 @@ public class DatabaseManager {
             config.setMaxLifetime(validateTimeout(
                 poolConfig.getLong("max-lifetime", 1800000), "max-lifetime", 30000, 1800000));
         }
+
+        // Defense-in-depth safety defaults. These Connector/J flags have a long
+        // history of being abused for RCE or arbitrary-file-read; explicitly
+        // disable them so a future upstream default change does not silently
+        // weaken our posture. The properties allowlist
+        // (validateMySQLProperty) prevents these keys from appearing in the
+        // URL anyway, but URL params win on conflict so we set them here as
+        // a belt to that suspenders.
+        // - allowLoadLocalInfile / allowUrlInLocalInfile: LOAD DATA LOCAL INFILE
+        // - autoDeserialize: Java deserialization of result-set BLOBs (CVE history)
+        // - allowPublicKeyRetrieval: lets a hostile MySQL server retrieve plaintext
+        //   credentials via the RSA public-key handshake
+        config.addDataSourceProperty("allowLoadLocalInfile", "false");
+        config.addDataSourceProperty("allowUrlInLocalInfile", "false");
+        config.addDataSourceProperty("autoDeserialize", "false");
+        config.addDataSourceProperty("allowPublicKeyRetrieval", "false");
 
         // MySQL Connector/J + HikariCP performance recommendations
         // (see https://github.com/brettwooldridge/HikariCP/wiki/MySQL-Configuration)

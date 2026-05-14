@@ -216,6 +216,8 @@ When [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/) i
 
 The expansion is registered automatically at plugin enable and persists across `/papi reload`.
 
+> **Note:** `%stormtrooperx_optout%` is **online-only**. The opt-out state lives in an in-memory cache that is populated when a player joins and cleared when they quit, so the placeholder reflects only currently-online players. Offline players resolve to `false` even if their persisted state is "opted out". This keeps the mob-shoot hot path lock-free and zero-I/O — mobs can only target online players, so the placeholder is consistent with in-game behavior. Tools that need persisted state for offline players should query the database directly.
+
 ## Building from Source
 
 ### Prerequisites

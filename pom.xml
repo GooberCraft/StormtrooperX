@@ -91,6 +91,27 @@
                     </execution>
                 </executions>
             </plugin>
+            <!--
+                CycloneDX SBOM. Default phase is `verify`; CI already runs
+                `mvn clean verify` so the SBOM is produced for every build.
+                Output: target/bom.xml, target/bom.json.
+                The release workflow uploads both files alongside the JAR so
+                downstream consumers can audit the shaded dependency tree
+                (bStats, H2, HikariCP, MySQL Connector/J).
+            -->
+            <plugin>
+                <groupId>org.cyclonedx</groupId>
+                <artifactId>cyclonedx-maven-plugin</artifactId>
+                <version>2.9.1</version>
+                <executions>
+                    <execution>
+                        <id>build-sbom</id>
+                        <goals>
+                            <goal>makeBom</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>

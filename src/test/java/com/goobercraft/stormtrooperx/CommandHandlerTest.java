@@ -658,6 +658,27 @@ class CommandHandlerTest {
         }
 
         @Test
+        @DisplayName("offline target with control chars -> echoed name is sanitized")
+        void offlineTargetWithControlChars() {
+            final Player sender = mock(Player.class);
+            final Server server = mock(Server.class);
+            // Carriage return + section sign + LF would let a malicious admin
+            // forge styled content into another admin's chat. Sanitizer strips
+            // both to '?' and caps at 16 chars.
+            final String hostile = "Ghost\r§cFAKE\nstuff";
+            when(sender.hasPermission("stormtrooperx.optout.others")).thenReturn(true);
+            doReturn(server).when(plugin).getServer();
+            when(server.getPlayer(hostile)).thenReturn(null);
+
+            final boolean result = plugin.onCommand(sender, stxCommand(), "stx",
+                new String[]{"optout", hostile});
+
+            assertThat(result).isTrue();
+            // Expected sanitized output: 16 chars, with CR/§/LF replaced by '?'.
+            verify(sender).sendMessage(ChatColor.RED + "Player 'Ghost??cFAKE?stu' is not online.");
+        }
+
+        @Test
         @DisplayName("admin targeting self -> no duplicate 'an admin has...' message")
         void targetIsSelf() {
             final Player sender = mock(Player.class);

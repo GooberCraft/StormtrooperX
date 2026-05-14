@@ -17,8 +17,6 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
-    reviewers:
-      - "mdw19873"
     # JUnit Jupiter 6.x requires Java 17+; keep on 5.x while targeting Java 11
     ignore:
       - dependency-name: "org.junit.jupiter:*"
@@ -49,5 +47,3 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "ci"
-    reviewers:
-      - "mdw19873"
