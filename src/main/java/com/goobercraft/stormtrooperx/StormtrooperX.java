@@ -341,24 +341,28 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     }
 
     /**
-     * Strips CR and LF from a value before it is written to a log line, so a
-     * value can neither forge nor split log entries (CWE-117 log injection).
+     * Filters a value down to version-string characters before it is written
+     * to a log line, so it can neither forge nor split log entries
+     * (CWE-117 log injection).
      *
      * <p>Used by {@link #checkForUpdates()} for the version strings passed to
-     * the {@code UpdateChecker} callback. The regex literal deliberately
-     * contains {@code \r} and {@code \n} so static analysis recognizes it as a
-     * log-injection sanitizer at the sink — the upstream
+     * the {@code UpdateChecker} callback. The allowlist {@code replaceAll}
+     * (a negated character class) is deliberate: CodeQL's
+     * {@code java/log-injection} query recognizes a negated-class
+     * {@code replaceAll} as a sanitizer but does <em>not</em> recognize a
+     * {@code [\r\n]} denylist as one, and the upstream
      * {@code UpdateChecker.validateReleaseTag} guard cannot be traced across
-     * the callback boundary.</p>
+     * the callback boundary. CR and LF are not in the allowlist, so they — and
+     * any other unexpected character — are dropped.</p>
      *
      * @param value the raw value, may be null
-     * @return the value with CR/LF removed, or the string {@code "null"} if null
+     * @return the value reduced to {@code [A-Za-z0-9._+-]}, or {@code "null"} if null
      */
     static String sanitizeForLog(String value) {
         if (value == null) {
             return "null";
         }
-        return value.replaceAll("[\r\n]", "");
+        return value.replaceAll("[^A-Za-z0-9._+-]", "");
     }
 
     /**

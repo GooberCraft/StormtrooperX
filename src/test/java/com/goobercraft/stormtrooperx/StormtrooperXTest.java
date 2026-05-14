@@ -56,15 +56,16 @@ class StormtrooperXTest {
         @Test
         @DisplayName("strips a CR used to forge a log line")
         void stripsCarriageReturn() {
+            // CR plus the space are both outside the version allowlist.
             assertThat(StormtrooperX.sanitizeForLog("1.9.0\rINFO forged"))
-                .isEqualTo("1.9.0INFO forged");
+                .isEqualTo("1.9.0INFOforged");
         }
 
         @Test
         @DisplayName("strips an LF used to forge a log line")
         void stripsLineFeed() {
             assertThat(StormtrooperX.sanitizeForLog("1.9.0\nWARNING fake"))
-                .isEqualTo("1.9.0WARNING fake");
+                .isEqualTo("1.9.0WARNINGfake");
         }
 
         @Test
@@ -72,6 +73,14 @@ class StormtrooperXTest {
         void stripsAllLineBreaks() {
             assertThat(StormtrooperX.sanitizeForLog("1.9.0\r\n\r\nx"))
                 .isEqualTo("1.9.0x");
+        }
+
+        @Test
+        @DisplayName("drops any character outside the version allowlist")
+        void dropsNonAllowlistedChars() {
+            // spaces, control chars, the section sign, quotes, shell metachars
+            assertThat(StormtrooperX.sanitizeForLog("1.0 §c\t\"; rm -rf"))
+                .isEqualTo("1.0crm-rf");
         }
 
         @ParameterizedTest(name = "leaves clean version [{0}] unchanged")
