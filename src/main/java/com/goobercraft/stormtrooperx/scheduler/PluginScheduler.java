@@ -34,13 +34,9 @@ public interface PluginScheduler {
     void runGlobal(Runnable task);
 
     /**
-     * Selects and returns the appropriate scheduler implementation for the
-     * running server. Folia is detected via the presence of
-     * {@code io.papermc.paper.threadedregions.RegionizedServer}; if absent the
-     * legacy {@code BukkitScheduler}-based implementation is returned.
-     *
-     * <p>Emits a single INFO log line at startup describing which path was
-     * chosen.</p>
+     * Selects the scheduler implementation for the running server: Folia (detected
+     * via {@code io.papermc.paper.threadedregions.RegionizedServer}) or the legacy
+     * {@code BukkitScheduler}. Logs one INFO line describing the chosen path.
      *
      * @param plugin Plugin instance (must not be null)
      * @return A scheduler appropriate for the host server
@@ -56,9 +52,8 @@ public interface PluginScheduler {
             plugin.getLogger().info("Standard Bukkit scheduler in use");
             return new LegacyBukkitScheduler(plugin);
         }
-        // Folia detected. If the reflective adapter cannot initialize (Folia
-        // scheduler API moved or was renamed in a future release), fall back
-        // to the legacy scheduler rather than failing plugin enable entirely.
+        // Folia detected — fall back to the legacy scheduler if the reflective
+        // adapter can't bind (Folia API moved/renamed) rather than failing enable.
         try {
             final PluginScheduler folia = new FoliaScheduler(plugin);
             plugin.getLogger().info("Folia detected, using regional schedulers");

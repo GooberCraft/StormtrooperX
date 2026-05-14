@@ -17,19 +17,12 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
 
 /**
- * Manages player opt-out preferences with an in-memory cache.
- * Uses lazy loading strategy: loads opt-out status on player join, removes on quit.
- * Database operations are performed asynchronously to avoid blocking the main thread.
+ * Facade over {@link DatabaseManager} backed by an in-memory cache: opt-out
+ * status is loaded on player join, evicted on quit, and all DB I/O runs async
+ * so the main thread is never blocked.
  *
- * This class acts as a facade coordinating between the cache layer and DatabaseManager.
- *
- * <p><b>Thread Safety:</b> This class is thread-safe. The internal cache uses a
- * {@link ConcurrentHashMap}-backed {@link Set}, which provides thread-safe operations
- * without explicit synchronization. All database operations are performed asynchronously
- * on separate threads via Bukkit's scheduler, ensuring the main game thread is never blocked.
- * Cache reads (via {@link #isOptedOut(UUID)}) are lock-free and safe to call from any thread.
- * Cache writes are atomic and coordination between threads is handled by the underlying
- * {@link ConcurrentHashMap}.</p>
+ * <p>Thread-safe — the cache is a {@link ConcurrentHashMap}-backed {@link Set},
+ * so reads are lock-free and safe from any thread.</p>
  */
 public class OptOutManager implements Listener {
 
@@ -49,7 +42,6 @@ public class OptOutManager implements Listener {
      */
     public OptOutManager(Logger logger, DatabaseManager databaseManager,
                          PluginScheduler scheduler, int maxPlayers) {
-        // Defensive: validate constructor parameters
         if (logger == null) {
             throw new IllegalArgumentException("logger cannot be null");
         }
@@ -67,9 +59,7 @@ public class OptOutManager implements Listener {
         this.databaseManager = databaseManager;
         this.scheduler = scheduler;
 
-        // Size cache for ~25% of max players opting out (conservative estimate)
-        // Use thread-safe ConcurrentHashMap-backed set for async operations
-        // Cap at 16384 to prevent excessive memory allocation on misconfigured servers
+        // Size for ~25% of max players; floor 16, cap 16384 (misconfigured maxPlayers).
         final int initialCapacity = Math.min(Math.max(16, maxPlayers / 4), 16384);
         this.optedOutCache = Collections.newSetFromMap(new ConcurrentHashMap<>(initialCapacity));
 
@@ -86,48 +76,31 @@ public class OptOutManager implements Listener {
 
     /**
      * Checks if a player has opted out.
-     * Uses in-memory cache for fast O(1) lookups.
      *
-     * <p><b>Online-only semantics.</b> This method only consults the in-memory
-     * cache, which is populated on {@link PlayerJoinEvent} and cleared on
-     * {@link PlayerQuitEvent}. For an offline player it returns {@code false}
-     * regardless of their persisted opt-out state. This is intentional:
-     * the cache exists to keep the {@code EntityShootBowEvent} hot path
-     * lock-free and zero-I/O, and a mob can only target an online player
-     * anyway. Callers that need the persisted state for an offline player
-     * (admin tooling, batch scripts) should query
-     * {@link DatabaseManager#isOptedOut(UUID)} directly off the main thread.
-     * The PAPI {@code %stormtrooperx_optout%} placeholder inherits this
-     * limitation; see {@link StormtrooperXExpansion#onRequest}.</p>
-     *
-     * <p><b>Thread Safety:</b> This method is thread-safe and lock-free.
-     * It can be safely called from the main game thread during event handling
-     * or from async threads. The underlying {@link ConcurrentHashMap} provides
-     * thread-safe read operations without blocking.</p>
+     * <p><b>Online-only:</b> consults only the in-memory cache (populated on
+     * join, cleared on quit), so an offline player always reads {@code false}
+     * regardless of persisted state. Callers needing persisted state should
+     * query {@link DatabaseManager#isOptedOut(UUID)}. Lock-free, safe from any
+     * thread.</p>
      *
      * @param playerUUID Player's UUID
-     * @return true if the player is online and cached as opted out, false otherwise
+     * @return true if online and cached as opted out
      */
     public boolean isOptedOut(UUID playerUUID) {
         if (playerUUID == null) {
             logger.warning("Attempted to check opt-out status with null UUID");
             return false;
         }
-
-        // Check cache (only online players are cached)
         return optedOutCache.contains(playerUUID);
     }
 
     /**
-     * Sets a player's opt-out status.
-     * Updates cache immediately (synchronous) and database asynchronously.
-     * This ensures gameplay is not blocked by database I/O.
+     * Sets a player's opt-out status: updates the cache synchronously, then
+     * persists asynchronously so gameplay is never blocked on DB I/O.
      *
-     * <p><b>Thread Safety:</b> This method is thread-safe. The cache update
-     * is atomic (provided by {@link ConcurrentHashMap}), and the database write
-     * is delegated to an async thread. If called from multiple threads simultaneously
-     * for the same player, the final state will be consistent, though the order of
-     * database writes is not guaranteed (last write wins).</p>
+     * <p>Thread-safe. Concurrent calls for the same player converge to a
+     * consistent cache state; DB write order is not guaranteed (last write
+     * wins).</p>
      *
      * @param playerUUID Player's UUID
      * @param optedOut Whether the player is opted out
@@ -138,29 +111,25 @@ public class OptOutManager implements Listener {
             return;
         }
 
-        // Update cache immediately (thread-safe, non-blocking)
         if (optedOut) {
             optedOutCache.add(playerUUID);
         } else {
             optedOutCache.remove(playerUUID);
         }
 
-        // Write to database asynchronously to avoid blocking main thread
         scheduler.runAsync(() -> {
             try {
                 databaseManager.setOptOut(playerUUID, optedOut);
                 logger.fine("Async DB write completed for player " + playerUUID + ": opted out = " + optedOut);
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Failed to write opt-out status to database for " + playerUUID, e);
-                // Note: Cache is already updated, so gameplay continues normally
-                // The database will be out of sync until next successful write
+                // Cache already updated, so gameplay is unaffected; DB resyncs on next write.
             }
         });
     }
 
     /**
      * Toggles a player's opt-out status.
-     * Updates both the database and in-memory cache.
      *
      * @param playerUUID Player's UUID
      * @return The new opt-out status
@@ -178,9 +147,8 @@ public class OptOutManager implements Listener {
     }
 
     /**
-     * Handles player join events.
-     * Loads the player's opt-out status from database asynchronously to avoid blocking main thread.
-     * Until the async query completes, the player is assumed to not be opted out (safe default).
+     * Loads the player's opt-out status from the database asynchronously on join.
+     * Until the query completes the player is treated as not opted out (safe default).
      *
      * @param event Player join event
      */
@@ -190,19 +158,16 @@ public class OptOutManager implements Listener {
         final UUID playerUUID = player.getUniqueId();
         final String playerName = player.getName();
 
-        // Query database asynchronously to avoid blocking main thread during player join
         scheduler.runAsync(() -> {
             try {
-                // Query database for opt-out status (off main thread)
                 final boolean optedOut = databaseManager.isOptedOut(playerUUID);
 
                 if (optedOut) {
-                    // Add to cache (thread-safe ConcurrentHashMap)
                     optedOutCache.add(playerUUID);
                     logger.fine("Player " + playerName + " joined (opted out, added to cache)");
 
-                    // Notify the player on the global thread (Folia-safe). isOnline check
-                    // because the async query may finish after the player disconnects.
+                    // Notify on the global thread (Folia-safe); isOnline guards against
+                    // the async query finishing after the player disconnects.
                     scheduler.runGlobal(() -> {
                         if (player.isOnline()) {
                             player.sendMessage(ChatColor.GRAY
@@ -222,8 +187,7 @@ public class OptOutManager implements Listener {
     }
 
     /**
-     * Handles player quit events.
-     * Removes the player from the cache to save memory.
+     * Evicts the player from the cache on quit to free memory.
      *
      * @param event Player quit event
      */
@@ -231,7 +195,6 @@ public class OptOutManager implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         final UUID playerUUID = event.getPlayer().getUniqueId();
 
-        // Remove from cache (will be reloaded on next join)
         final boolean wasInCache = optedOutCache.remove(playerUUID);
 
         if (wasInCache) {

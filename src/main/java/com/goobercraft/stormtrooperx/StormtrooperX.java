@@ -27,18 +27,12 @@ import org.jetbrains.annotations.NotNull;
 import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
 
 /**
- * StormtrooperX - A Minecraft plugin that nerfs the accuracy of ranged mobs.
+ * StormtrooperX — a Minecraft plugin that nerfs the accuracy of ranged mobs.
  *
- * This is a refactored and enhanced version of the original Stormtrooper plugin
- * by byteful (https://github.com/byteful/Stormtrooper).
- *
- * Enhancements include:
- * - Support for multiple mob types (Skeleton, Stray, Bogged, Parched, Pillager, Piglin)
- * - Version compatibility (1.13+)
- * - Arrow and crossbow bolt speed preservation (only direction is modified)
- * - Reload command and improved UX
- * - Per-entity configuration
- * - Player opt-out system
+ * <p>JavaPlugin entry point: owns config, the per-entity {@link EntityConfig}
+ * map, the {@code /stormtrooperx} command, and the {@code EntityShootBowEvent}
+ * handler. A refactor of byteful's original Stormtrooper
+ * (https://github.com/byteful/Stormtrooper).</p>
  *
  * @author GooberCraft
  * @author byteful (original implementation)
@@ -46,19 +40,18 @@ import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
 public final class StormtrooperX extends JavaPlugin implements Listener, TabCompleter {
     private final Logger logger = this.getLogger();
 
-    // volatile + atomic-swap pattern: the event handler runs on Folia regional
-    // threads while reload runs on the global thread. We never mutate a
-    // published map; loadConfiguration() builds a fresh EnumMap and assigns
-    // it as a single reference write, so readers always see a consistent
-    // snapshot without locks.
+    // volatile + atomic-swap: the event handler reads on Folia regional threads
+    // while reload runs on the global thread. loadConfiguration() never mutates
+    // a published map — it builds a fresh EnumMap and assigns it in one
+    // reference write, so readers always see a consistent snapshot, lock-free.
     private volatile java.util.Map<EntityType, EntityConfig> entityConfigs = new EnumMap<>(EntityType.class);
     private volatile boolean debug = false;
     private DatabaseManager databaseManager;
     private OptOutManager optOutManager;
     private PluginScheduler scheduler;
 
-    // Pre-sorted subcommand pools keyed by required permission. Sorted at class
-    // load so per-keystroke tab completion can skip Collections.sort.
+    // Subcommand pools by required permission, pre-sorted at class load so
+    // per-keystroke tab completion can skip Collections.sort.
     private static final List<String> TAB_PUBLIC = List.of("help");
     private static final List<String> TAB_ADMIN = List.of("reload");
     private static final List<String> TAB_OPTOUT = List.of("optin", "optout");
@@ -76,7 +69,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
 
         EntityConfig(boolean enabled, double accuracy) {
             this.enabled = enabled;
-            // Defensive: clamp accuracy to valid range [0.0, 1.0] at construction time
+            // Clamp to the valid [0.0, 1.0] range.
             this.accuracy = Math.max(0.0, Math.min(1.0, accuracy));
         }
 
@@ -96,23 +89,18 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
 
         loadConfiguration();
 
-        // Wire up permission-aware tab completion for /stormtrooperx
         Objects.requireNonNull(getCommand("stormtrooperx"),
             "Command 'stormtrooperx' missing from plugin.yml").setTabCompleter(this);
 
-        // Pick the right scheduler for this server (Folia vs legacy) once at startup
         scheduler = PluginScheduler.create(this);
 
-        // Initialize database with configuration
         final String databaseType = getConfig().getString("database.type", "h2");
         databaseManager = new DatabaseManager(logger, getDataFolder(), databaseType, getConfig().getConfigurationSection("database.mysql"));
         databaseManager.initialize();
 
-        // Initialize opt-out manager with async support and server max players for cache sizing
         optOutManager = new OptOutManager(logger, databaseManager, scheduler, getServer().getMaxPlayers());
         this.getServer().getPluginManager().registerEvents(optOutManager, this);
 
-        // Conditionally register PlaceholderAPI expansion when PAPI is present
         registerPlaceholderApiExpansion();
 
         this.logger.info("========================================");
@@ -121,11 +109,9 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
         this.logger.info("  Nerfing mob accuracy...");
         this.logger.info("========================================");
 
-        // Initialize bStats metrics
         final int pluginId = 27782;
         new Metrics(this, pluginId);
 
-        // Check for updates
         if (getConfig().getBoolean("check-for-updates", true)) {
             checkForUpdates();
         }
@@ -133,12 +119,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
 
     @Override
     public void onDisable() {
-        // Shutdown opt-out manager
         if (optOutManager != null) {
             optOutManager.shutdown();
         }
 
-        // Close database connection
         if (databaseManager != null) {
             databaseManager.close();
         }
@@ -173,11 +157,8 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     private void checkForUpdates() {
         final UpdateChecker updateChecker = new UpdateChecker(this, scheduler, "GooberCraft/StormtrooperX");
         updateChecker.checkForUpdates((comparison, currentVersion, latestVersion) -> {
-            // Sink-side CWE-117 guard. latestVersion is already shape-validated
-            // by UpdateChecker.validateReleaseTag and currentVersion comes from
-            // plugin.yml, but the sanitizer lives across a callback boundary so
-            // static analysis cannot trace it to this sink. sanitizeForLog keeps
-            // the guard local and is cheap defense-in-depth.
+            // Sink-side CWE-117 guard: both values are validated upstream, but
+            // the guard sits across a callback boundary, so re-sanitize locally.
             final String safeCurrent = sanitizeForLog(currentVersion);
             final String safeLatest = sanitizeForLog(latestVersion);
             if (comparison < 0) {
@@ -196,18 +177,17 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     }
 
     private void loadConfiguration() {
-        // Check config version and migrate if needed
         final int configVersion = getConfig().getInt("config-version", 2);
         if (configVersion == 2) {
             this.logger.info("Detected config format v2. Migrating to v3...");
             migrateConfigToV3();
-            reloadConfig(); // Reload after migration
+            reloadConfig();
         }
 
         debug = getConfig().getBoolean("debug", false);
 
-        // Build a fresh map and atomically publish it at the end so Folia
-        // regional event threads never observe a partially populated state.
+        // Build into a staging map and publish in one write — Folia event
+        // threads must never see a partially populated map.
         final java.util.Map<EntityType, EntityConfig> staging = new EnumMap<>(EntityType.class);
         loadEntityConfig(staging, "skeleton", EntityType.SKELETON);
         loadEntityConfig(staging, "stray", EntityType.STRAY);
@@ -222,13 +202,9 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
      * Migrates configuration from v2 (per-entity accuracy) to v3 (database configuration added).
      */
     private void migrateConfigToV3() {
-        // V3 adds database configuration section
-        // All existing settings are preserved, we just add new database config
-
-        // Set new version
         getConfig().set("config-version", 3);
 
-        // Add default database configuration (H2 embedded)
+        // v3 adds the database.* block; existing settings are untouched.
         getConfig().set("database.type", "h2");
         getConfig().set("database.mysql.host", "localhost");
         getConfig().set("database.mysql.port", 3306);
@@ -240,9 +216,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
         getConfig().set("database.mysql.pool.connection-timeout", 30000);
         getConfig().set("database.mysql.pool.idle-timeout", 600000);
         getConfig().set("database.mysql.pool.max-lifetime", 1800000);
-        // Properties section will be empty by default
 
-        // Save migrated config
         saveConfig();
         this.logger.info("Config migration to v3 complete! Database configuration added (using H2 by default)");
         this.logger.info("You can configure MySQL database in config.yml if needed");
@@ -265,7 +239,6 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
         final boolean enabled = getConfig().getBoolean(path + ".enabled", true);
         final double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
 
-        // Warn if accuracy is out of valid range
         if (accuracy < 0.0 || accuracy > 1.0) {
             this.logger.warning(String.format("Entity '%s' has out-of-range accuracy value: %.2f (valid range: 0.0-1.0). Value will be clamped at runtime.", capitalize(configKey), accuracy));
         }
@@ -301,7 +274,6 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
             final EntityType entityType = EntityType.valueOf(entityTypeName);
             final double accuracy = getConfig().getDouble(path + ".accuracy", 0.7);
 
-            // Warn if accuracy is out of valid range
             if (accuracy < 0.0 || accuracy > 1.0) {
                 this.logger.warning(String.format("Entity '%s' has out-of-range accuracy value: %.2f (valid range: 0.0-1.0). Value will be clamped at runtime.", capitalize(configKey), accuracy));
             }
@@ -314,14 +286,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     }
 
     /**
-     * Strips characters that should never appear in echoed player names: ASCII
-     * control characters (CR/LF/tab), the Bukkit color section sign
-     * ({@code §}), and anything past 16 chars (Mojang's username limit).
-     * Replaces the first three with {@code ?} so the echoed name is visually
-     * distinguishable from a legitimate one.
-     *
-     * <p>On offline-mode servers a client can supply arbitrary bytes as a
-     * "name", so command args are not safe to echo unfiltered.</p>
+     * Sanitizes a player name for echoing into chat: replaces control chars and
+     * the Bukkit color sign ({@code §}) with {@code ?} and caps length at
+     * Mojang's 16-char limit. On offline-mode servers a client can supply
+     * arbitrary bytes as a "name", so command args are not safe to echo raw.
      */
     static String sanitizeNameForEcho(String input) {
         if (input == null) {
@@ -341,19 +309,13 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
     }
 
     /**
-     * Filters a value down to version-string characters before it is written
-     * to a log line, so it can neither forge nor split log entries
-     * (CWE-117 log injection).
+     * Filters a value to version-string characters before it is logged, so it
+     * cannot forge or split log entries (CWE-117).
      *
-     * <p>Used by {@link #checkForUpdates()} for the version strings passed to
-     * the {@code UpdateChecker} callback. The allowlist {@code replaceAll}
-     * (a negated character class) is deliberate: CodeQL's
-     * {@code java/log-injection} query recognizes a negated-class
-     * {@code replaceAll} as a sanitizer but does <em>not</em> recognize a
-     * {@code [\r\n]} denylist as one, and the upstream
-     * {@code UpdateChecker.validateReleaseTag} guard cannot be traced across
-     * the callback boundary. CR and LF are not in the allowlist, so they — and
-     * any other unexpected character — are dropped.</p>
+     * <p>The allowlist {@code replaceAll} (negated character class) is
+     * deliberate: CodeQL's {@code java/log-injection} query recognizes that
+     * form as a sanitizer but not a {@code [\r\n]} denylist. CR/LF and any
+     * other unexpected character are dropped.</p>
      *
      * @param value the raw value, may be null
      * @return the value reduced to {@code [A-Za-z0-9._+-]}, or {@code "null"} if null
@@ -415,24 +377,23 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
         }
 
         if (args.length == 1) {
-            // Probe permissions in the same order as the previous implementation
-            // (admin -> optout -> optout.others) so existing strict-stubbed tests
-            // observe an unchanged call sequence. Output is assembled alphabetically
-            // so we can skip Collections.sort.
+            // Permissions are probed admin -> optout -> optout.others to keep the
+            // call sequence stable for strict-stubbed tests; pools are pre-sorted
+            // so the assembled list needs no Collections.sort.
             final boolean canAdmin = sender.hasPermission("stormtrooperx.admin");
             final boolean canSelfOptout = sender instanceof Player && sender.hasPermission("stormtrooperx.optout");
             final boolean canAdminOptout = sender.hasPermission("stormtrooperx.optout.others");
 
             final List<String> available = new ArrayList<>(5);
-            available.addAll(TAB_PUBLIC); // help
+            available.addAll(TAB_PUBLIC);
             if (canSelfOptout || canAdminOptout) {
-                available.addAll(TAB_OPTOUT); // optin, optout
+                available.addAll(TAB_OPTOUT);
             }
             if (canAdmin) {
-                available.addAll(TAB_ADMIN); // reload
+                available.addAll(TAB_ADMIN);
             }
             if (canSelfOptout) {
-                available.addAll(TAB_TOGGLE); // toggle
+                available.addAll(TAB_TOGGLE);
             }
 
             final List<String> matches = new ArrayList<>();
@@ -584,9 +545,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
 
         final Player target = getServer().getPlayer(targetName);
         if (target == null) {
-            // Sanitize the echoed name: command args bypass Mojang's name regex
-            // (especially on offline-mode servers) and could carry control chars
-            // or section signs into another admin's chat.
+            // Sanitize: command args bypass Mojang's name regex on offline-mode servers.
             sender.sendMessage(ChatColor.RED + "Player '" + sanitizeNameForEcho(targetName) + "' is not online.");
             return;
         }
@@ -636,14 +595,13 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
 
     @EventHandler(ignoreCancelled = true)
     public void onBowShoot(EntityShootBowEvent event) {
-        // Cache once: hot path, accessed multiple times.
+        // Hot path — cache the shooter/type/config locals.
         final org.bukkit.entity.Entity shooter = event.getEntity();
         final EntityType entityType = shooter.getType();
-        // volatile read of the published snapshot — Folia regional thread safe.
+        // volatile read of the published snapshot — Folia regional-thread safe.
         final EntityConfig config = entityConfigs.get(entityType);
 
-        // Only process entities that are configured and enabled.
-        // Cheap nullity check first means non-configured shots cost almost nothing.
+        // Cheap null check first: non-configured shots cost almost nothing.
         if (config == null || !config.isEnabled()) {
             return;
         }
@@ -652,7 +610,6 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
             logger.info("EntityShootBowEvent -- " + entityType + ": " + event.getProjectile().getVelocity());
         }
 
-        // Check if the target player has opted out
         if (shooter instanceof Mob mob) {
             final LivingEntity target = mob.getTarget();
 
@@ -666,11 +623,10 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
             }
         }
 
-        // Cache projectile reference (one Bukkit call instead of two).
-        // getProjectile() returns Entity in this Spigot API version.
+        // getProjectile() returns Entity in this Spigot API version; cache it.
         final org.bukkit.entity.Entity projectile = event.getProjectile();
         final Vector velocity = projectile.getVelocity();
-        // lengthSquared() avoids an unnecessary sqrt; equals zero iff length is zero.
+        // lengthSquared() avoids a sqrt; zero iff the vector is zero-length.
         if (velocity.lengthSquared() == 0) {
             if (debug) {
                 logger.info("Skipping projectile with zero velocity from " + entityType);
@@ -678,8 +634,7 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
             return;
         }
 
-        // Delegate the speed-preserving direction perturbation to the pure helper.
-        // accuracy is already clamped to [0.0, 1.0] in EntityConfig constructor.
+        // accuracy is already clamped to [0.0, 1.0] by the EntityConfig ctor.
         ProjectileNerf.perturb(velocity, config.getAccuracy(), Vector::getRandom);
         projectile.setVelocity(velocity);
 

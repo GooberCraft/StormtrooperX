@@ -27,35 +27,28 @@ public class DatabaseManager {
 
     private final Logger logger;
     private final String databaseType;
-    // Cached once at construction so the hot DB paths skip repeated string compares.
+    // Cached at construction so hot DB paths skip repeated string compares.
     private final boolean isH2;
     private final File dataFolder;
     private final ConfigurationSection mysqlConfig;
 
-    // H2 connection (single connection, no pooling)
+    // Single long-lived H2 connection (no pool).
     private Connection h2Connection;
 
-    // Serializes access to the shared H2 connection. JDBC Connection instances
-    // are not thread-safe; multiple async tasks (OptOutManager player-join
-    // reads, /stx optout writes) can otherwise race on h2Connection. The
-    // MySQL path uses HikariCP and does not need this lock — each thread gets
-    // its own pooled connection.
+    // Serializes access to the shared H2 connection — JDBC Connections are not
+    // thread-safe and async tasks can otherwise race on it. The MySQL path uses
+    // HikariCP (a connection per thread) and needs no such lock.
     private final Object h2Lock = new Object();
 
-    // MySQL connection pool (HikariCP)
     private HikariDataSource hikariDataSource;
 
     /**
      * Allowlist of MySQL Connector/J properties admins may set under
-     * {@code database.mysql.properties} in {@code config.yml}.
-     *
-     * <p>Restricted to TLS, time/encoding, network, and a handful of safe
-     * behavior flags. Properties with a known RCE / file-read history
-     * (e.g. {@code allowLoadLocalInfile}, {@code autoDeserialize},
-     * {@code queryInterceptors}, {@code propertiesTransform}) are deliberately
-     * absent and cannot be enabled from config. If a future use case needs
-     * a property that is not on this list, prefer adding it here over
-     * removing the allowlist.</p>
+     * {@code database.mysql.properties}. Restricted to TLS, time/encoding,
+     * network, and safe behavior flags; properties with RCE / file-read history
+     * ({@code allowLoadLocalInfile}, {@code autoDeserialize},
+     * {@code queryInterceptors}, ...) are deliberately absent. Extend this list
+     * rather than removing the allowlist.
      */
     static final Set<String> SAFE_MYSQL_PROPERTY_KEYS = Set.of(
         // SSL/TLS
@@ -76,12 +69,9 @@ public class DatabaseManager {
         // Statement caching (callers may override the in-code defaults if needed)
         "cachePrepStmts", "prepStmtCacheSize", "prepStmtCacheSqlLimit", "useServerPrepStmts"
     );
-    // Note: 'sessionVariables' is intentionally NOT allowlisted. Its value
-    // inherently contains '=' (e.g. sessionVariables=sql_mode='...'), which
-    // collides with the strict no-'='/no-'&' value check below. It is also the
-    // most powerful property (arbitrary SET at connect time). If a concrete
-    // need arises, add it with a dedicated value validator rather than
-    // loosening the shared one.
+    // 'sessionVariables' is intentionally excluded: its value needs '=', which
+    // collides with the strict value check below, and it allows arbitrary SET
+    // at connect time. Add it with a dedicated validator if ever needed.
 
     /**
      * Creates a new database manager.
@@ -93,7 +83,6 @@ public class DatabaseManager {
      * @throws IllegalArgumentException if any required parameter is null or invalid
      */
     public DatabaseManager(Logger logger, File dataFolder, String databaseType, ConfigurationSection mysqlConfig) {
-        // Defensive: validate constructor parameters
         if (logger == null) {
             throw new IllegalArgumentException("logger cannot be null");
         }
@@ -112,9 +101,7 @@ public class DatabaseManager {
 
         this.logger = logger;
         this.dataFolder = dataFolder;
-        // Locale.ROOT keeps the case fold deterministic across server JVM locales
-        // (notably Turkish 'I'/'İ', which would otherwise change "MYSQL"
-        // unexpectedly under tr_TR).
+        // Locale.ROOT: deterministic case fold across JVM locales (e.g. Turkish I/İ).
         this.databaseType = databaseType.toLowerCase(Locale.ROOT);
         this.isH2 = this.databaseType.equals("h2");
         this.mysqlConfig = mysqlConfig;
@@ -131,7 +118,6 @@ public class DatabaseManager {
                 initializeMySQL();
             }
 
-            // Create table if it doesn't exist
             createTables();
 
             logger.info("Database initialized successfully (" + databaseType.toUpperCase() + ")");
@@ -143,21 +129,17 @@ public class DatabaseManager {
     }
 
     /**
-     * Initializes H2 in **embedded** mode — file-backed, in-process, no TCP listener.
+     * Initializes H2 in <b>embedded</b> mode — file-backed, in-process, no TCP listener.
      *
-     * <p><b>Do not</b> add {@code AUTO_SERVER=TRUE} or switch to {@code jdbc:h2:tcp://...}
-     * without re-evaluating credentials: the hardcoded {@code sa}/empty password
-     * is only safe because there is no network exposure in embedded mode.
-     * H2 also exposes {@code CREATE ALIAS}/Java function bindings that have a
-     * long RCE history; the plugin avoids them by only running fixed,
-     * parameterized statements.</p>
+     * <p>Do not add {@code AUTO_SERVER=TRUE} or switch to {@code jdbc:h2:tcp://...}
+     * without revisiting the hardcoded {@code sa}/empty password — it is only
+     * safe because there is no network exposure here.</p>
      */
     private void initializeH2() throws ClassNotFoundException, SQLException {
-        // Load H2 driver
         Class.forName("org.h2.Driver");
 
-        // - FILE_LOCK=SOCKET: prevents concurrent access on the file (data integrity)
-        // - MODE=MySQL: MySQL grammar compatibility for familiar syntax
+        // FILE_LOCK=SOCKET guards the file against concurrent access; MODE=MySQL
+        // gives MySQL grammar compatibility.
         final File databaseFile = new File(dataFolder, "players");
         final String url = "jdbc:h2:" + databaseFile.getAbsolutePath() + ";MODE=MySQL;FILE_LOCK=SOCKET";
         h2Connection = DriverManager.getConnection(url, "sa", "");
@@ -173,26 +155,18 @@ public class DatabaseManager {
      * @throws IllegalArgumentException if any parameter is invalid
      */
     private void validateMySQLParameters(String host, int port, String database, String username) {
-        // Validate host: alphanumeric, dots, hyphens, and underscores only
-        // This allows hostnames like "localhost", "db.example.com", "my-server_1"
         if (host == null || !host.matches("^[a-zA-Z0-9._-]+$")) {
             throw new IllegalArgumentException("Invalid MySQL host format: " + host +
                 ". Host must contain only alphanumeric characters, dots, hyphens, and underscores.");
         }
-
-        // Validate port: must be in valid TCP port range
         if (port < 1 || port > 65535) {
             throw new IllegalArgumentException("Invalid MySQL port: " + port +
                 ". Port must be between 1 and 65535.");
         }
-
-        // Validate database name: alphanumeric and underscores only (standard MySQL naming)
         if (database == null || !database.matches("^[a-zA-Z0-9_]+$")) {
             throw new IllegalArgumentException("Invalid MySQL database name: " + database +
                 ". Database name must contain only alphanumeric characters and underscores.");
         }
-
-        // Validate username: alphanumeric, underscores, and hyphens (common MySQL username chars)
         if (username == null || !username.matches("^[a-zA-Z0-9_-]+$")) {
             throw new IllegalArgumentException("Invalid MySQL username: " + username +
                 ". Username must contain only alphanumeric characters, underscores, and hyphens.");
@@ -200,20 +174,14 @@ public class DatabaseManager {
     }
 
     /**
-     * Validates a single user-supplied JDBC property key/value pair before it
-     * is appended to the JDBC URL.
+     * Validates a user-supplied JDBC property key/value pair before it is
+     * appended to the JDBC URL. Keys must be in {@link #SAFE_MYSQL_PROPERTY_KEYS};
+     * values must not contain {@code &}, {@code =}, or control characters (which
+     * could smuggle extra URL parameters). Valid values are URL-encoded at the
+     * call site.
      *
-     * <p>Defense-in-depth against a misconfigured (or compromised) admin
-     * enabling Connector/J flags with known RCE / file-read history. Keys
-     * must appear in {@link #SAFE_MYSQL_PROPERTY_KEYS}; values must not
-     * contain characters that could smuggle additional URL parameters
-     * ({@code &}, {@code =}, CR, LF, control chars). Allowed values are
-     * subsequently URL-encoded at the call site so structurally-valid
-     * special characters (e.g. {@code +} in a timezone) do not break URL
-     * parsing.</p>
-     *
-     * @throws IllegalArgumentException if the key is not allowlisted, the
-     *         value is null, or the value contains a forbidden character
+     * @throws IllegalArgumentException if the key is not allowlisted, the value
+     *         is null, or the value contains a forbidden character
      */
     void validateMySQLProperty(String key, String value) {
         if (key == null || !SAFE_MYSQL_PROPERTY_KEYS.contains(key)) {
@@ -284,18 +252,13 @@ public class DatabaseManager {
         final String username = mysqlConfig.getString("username", "root");
         final String password = mysqlConfig.getString("password", "");
 
-        // Validate connection parameters to prevent JDBC URL injection
         validateMySQLParameters(host, port, database, username);
 
-        // Build JDBC URL with custom properties
         final StringBuilder jdbcUrl = new StringBuilder();
         jdbcUrl.append("jdbc:mysql://").append(host).append(":").append(port).append("/").append(database);
 
-        // Append custom connection properties if provided. Keys are checked
-        // against an allowlist and values are URL-encoded so a malicious value
-        // cannot smuggle additional parameters or enable Connector/J features
-        // with a known RCE / file-read history (allowLoadLocalInfile,
-        // autoDeserialize, queryInterceptors, ...).
+        // Each property is allowlist-checked and URL-encoded so a value cannot
+        // smuggle extra parameters. See validateMySQLProperty.
         final ConfigurationSection properties = mysqlConfig.getConfigurationSection("properties");
         if (properties != null && !properties.getKeys(false).isEmpty()) {
             jdbcUrl.append("?");
@@ -311,13 +274,11 @@ public class DatabaseManager {
             }
         }
 
-        // Configure HikariCP
         final HikariConfig config = new HikariConfig();
         config.setJdbcUrl(jdbcUrl.toString());
         config.setUsername(username);
         config.setPassword(password);
 
-        // Pool configuration with validation
         final ConfigurationSection poolConfig = mysqlConfig.getConfigurationSection("pool");
         if (poolConfig != null) {
             final int maxPoolSize = validatePoolSize(
@@ -336,39 +297,26 @@ public class DatabaseManager {
                 poolConfig.getLong("max-lifetime", 1800000), "max-lifetime", 30000, 1800000));
         }
 
-        // Defense-in-depth safety defaults. These Connector/J flags have a long
-        // history of being abused for RCE or arbitrary-file-read; explicitly
-        // disable them so a future upstream default change does not silently
-        // weaken our posture. The properties allowlist
-        // (validateMySQLProperty) prevents these keys from appearing in the
-        // URL anyway, but URL params win on conflict so we set them here as
-        // a belt to that suspenders.
-        // - allowLoadLocalInfile / allowUrlInLocalInfile: LOAD DATA LOCAL INFILE
-        // - autoDeserialize: Java deserialization of result-set BLOBs (CVE history)
-        // - allowPublicKeyRetrieval: lets a hostile MySQL server retrieve plaintext
-        //   credentials via the RSA public-key handshake
+        // Defense-in-depth: explicitly disable Connector/J flags with RCE /
+        // file-read / credential-leak history so an upstream default change
+        // can't silently re-enable them. The allowlist already blocks these
+        // keys from the URL; this is the belt to that suspenders.
         config.addDataSourceProperty("allowLoadLocalInfile", "false");
         config.addDataSourceProperty("allowUrlInLocalInfile", "false");
         config.addDataSourceProperty("autoDeserialize", "false");
         config.addDataSourceProperty("allowPublicKeyRetrieval", "false");
 
-        // MySQL Connector/J + HikariCP performance recommendations
-        // (see https://github.com/brettwooldridge/HikariCP/wiki/MySQL-Configuration)
-        // - Prepared statement caching: client- and server-side
+        // Connector/J + HikariCP performance settings (HikariCP wiki:
+        // MySQL-Configuration) — statement caching, fewer round-trips, batch rewrite.
         config.addDataSourceProperty("cachePrepStmts", "true");
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
         config.addDataSourceProperty("useServerPrepStmts", "true");
-        // - Avoid round-trips for session state the driver already knows
         config.addDataSourceProperty("useLocalSessionState", "true");
-        // - Batched insert/update rewriting (no-op when batches aren't used, free win)
         config.addDataSourceProperty("rewriteBatchedStatements", "true");
-        // - Cache result set + server config metadata to skip redundant queries
         config.addDataSourceProperty("cacheResultSetMetadata", "true");
         config.addDataSourceProperty("cacheServerConfiguration", "true");
-        // - Suppress unnecessary SET autocommit calls when driver state matches
         config.addDataSourceProperty("elideSetAutoCommits", "true");
-        // - Skip per-statement timestamp tracking; HikariCP itself tracks pool stats
         config.addDataSourceProperty("maintainTimeStats", "false");
 
         hikariDataSource = new HikariDataSource(config);
@@ -507,13 +455,11 @@ public class DatabaseManager {
     }
 
     private void setOptOutInternal(UUID playerUUID, boolean optedOut) {
-        // Use appropriate upsert syntax for database type
+        // Upsert syntax differs: H2 MERGE vs MySQL INSERT ... ON DUPLICATE KEY.
         final String upsertSQL;
         if (isH2) {
-            // H2 syntax (MySQL mode)
             upsertSQL = "MERGE INTO player_optouts (uuid, opted_out, updated_at) KEY(uuid) VALUES (?, ?, CURRENT_TIMESTAMP)";
         } else {
-            // MySQL syntax
             upsertSQL = "INSERT INTO player_optouts (uuid, opted_out, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) " +
                     "ON DUPLICATE KEY UPDATE opted_out = VALUES(opted_out), updated_at = CURRENT_TIMESTAMP";
         }

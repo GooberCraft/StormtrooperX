@@ -22,25 +22,18 @@ public class UpdateChecker {
     private final String githubRepo;
     private String latestVersion;
 
-    // Maximum allowed response size to prevent memory exhaustion attacks
+    // Cap on the GitHub API response size — guards against memory exhaustion.
     private static final int MAX_RESPONSE_SIZE_BYTES = 1024 * 1024; // 1MB
 
-    // GitHub's actual owner/repo naming rules: alphanumeric, dot, hyphen, underscore.
-    // Defense-in-depth: rejects path-traversal segments, query/fragment delimiters,
-    // and JDBC/log-injection control characters even though the host is fixed to
-    // api.github.com at the call site.
+    // GitHub owner/repo naming rules. Defense-in-depth: rejects path traversal,
+    // query/fragment delimiters, and control chars even though the host is fixed.
     private static final Pattern GITHUB_REPO_PATTERN = Pattern.compile("^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$");
 
-    // Strict semver-ish shape for release tags fetched from GitHub. The remote response
-    // is untrusted (could be tampered if the release page is compromised or TLS bypassed),
-    // so we reject anything that wouldn't be a valid version string before it reaches
-    // log lines or version comparison. Closes CWE-117 (log injection) and hardens
-    // parseVersionPart against malformed input.
-    //
-    // Allows: optional leading 'v', 1-4 numeric segments, optional pre-release/build
-    // suffix of [A-Za-z0-9.-] separated by '-' or '+'.
-    // Examples accepted: 1.9.0, v1.9.0, 1.9.0-rc1, 1.0.0+build.123, 1.0.0-SNAPSHOT
-    // Examples rejected: anything with whitespace, control chars, or non-version syntax
+    // Strict semver-ish shape for release tags. The GitHub response is untrusted
+    // (tamperable if the release page is compromised or TLS is bypassed), so a tag
+    // is rejected before it can reach a log line or version compare — closes
+    // CWE-117. Allows: optional leading 'v', 1-4 numeric segments, optional
+    // [-+] pre-release/build suffix. e.g. 1.9.0, v1.9.0, 1.9.0-rc1, 1.0.0+build.1
     private static final Pattern RELEASE_TAG_PATTERN = Pattern.compile(
         "^v?\\d+(\\.\\d+){0,3}([-+][A-Za-z0-9.-]+)?$");
 
@@ -53,7 +46,6 @@ public class UpdateChecker {
      * @throws IllegalArgumentException if any required parameter is invalid
      */
     public UpdateChecker(Plugin plugin, PluginScheduler scheduler, String githubRepo) {
-        // Defensive: validate constructor parameters
         if (plugin == null) {
             throw new IllegalArgumentException("plugin cannot be null");
         }
@@ -115,28 +107,23 @@ public class UpdateChecker {
 
             final int responseCode = connection.getResponseCode();
             if (responseCode == 200) {
-                // Limit response size to prevent memory exhaustion attacks
+                // Content-Length may be -1 (header absent); the streaming check
+                // below is the real guard against an oversized response.
                 final int contentLength = connection.getContentLength();
                 if (contentLength > MAX_RESPONSE_SIZE_BYTES) {
                     plugin.getLogger().warning("Response size too large, possible security issue");
                     return null;
                 }
-                // Note: contentLength may be -1 if server doesn't provide Content-Length header
-                // The runtime check below will still protect against large responses
 
-                // Use try-with-resources to ensure proper resource cleanup
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
                     final StringBuilder response = new StringBuilder();
                     String line;
                     int totalChars = 0;
                     while ((line = reader.readLine()) != null) {
+                        // Char count, not byte count — approximate but a generous,
+                        // intentional cap (legitimate responses are ~10KB).
                         totalChars += line.length();
-                        // Runtime check to prevent memory exhaustion attacks
-                        // Note: We use character count rather than byte count for simplicity.
-                        // In Java, chars are UTF-16 (2 bytes each), so actual memory usage may be 2x this limit,
-                        // but the limit is generous (1MB of chars = ~2MB memory) and sufficient for legitimate
-                        // GitHub API responses (~10KB typical). This is a security control, not exact accounting.
                         if (totalChars > MAX_RESPONSE_SIZE_BYTES) {
                             plugin.getLogger().warning("Response too large, aborting");
                             return null;
@@ -144,14 +131,12 @@ public class UpdateChecker {
                         response.append(line);
                     }
 
-                    // Parse JSON response to get tag_name
                     final String json = response.toString();
                     final String tagName = extractJsonValue(json, "tag_name");
 
                     final String validated = validateReleaseTag(tagName);
                     if (validated == null && tagName != null) {
-                        // Tag was present but did not match the strict shape; refuse to
-                        // propagate it so log lines and version compare see only safe input.
+                        // Tag present but malformed — drop it so only safe input flows on.
                         plugin.getLogger().warning(
                             "Discarding malformed release tag from GitHub API; update check skipped.");
                     }
@@ -170,13 +155,11 @@ public class UpdateChecker {
     }
 
     /**
-     * Validates a release tag against the strict {@link #RELEASE_TAG_PATTERN} and
-     * strips an optional leading {@code v}. Returns null for any input that does
-     * not match (including null) so that callers can treat "no valid version" and
-     * "malformed version" uniformly.
-     *
-     * <p>This is the sole barrier between the untrusted GitHub response and the
-     * rest of the plugin (logger, version comparison). Do not bypass it.</p>
+     * Validates a release tag against {@link #RELEASE_TAG_PATTERN} and strips an
+     * optional leading {@code v}. Returns null for any non-matching input
+     * (including null), so callers treat "no version" and "bad version" alike.
+     * This is the sole barrier between the untrusted GitHub response and the
+     * rest of the plugin — do not bypass it.
      *
      * @param tagName Raw tag string from the GitHub API, or null
      * @return The validated version with any leading {@code v} removed, or null if invalid
@@ -189,17 +172,13 @@ public class UpdateChecker {
     }
 
     /**
-     * Simple JSON value extractor (avoids needing a JSON library dependency).
+     * Minimal JSON value extractor — avoids a JSON library dependency.
      *
-     * <p><b>Single-field use only.</b> This is a hand-rolled {@code indexOf}
-     * parser intended exclusively for the GitHub Releases {@code tag_name}
-     * field, whose value is independently constrained by
-     * {@link #RELEASE_TAG_PATTERN}. It does <em>not</em> handle escaped
-     * quotes ({@code \"}), unicode escapes, nested objects, or whitespace
-     * around the colon. Do not extend this method to parse arbitrary fields
-     * (e.g. {@code body}, {@code name}, {@code html_url}) — those can contain
-     * attacker-influenced content where the lack of escape handling becomes
-     * a real bug. If you need another field, add a real JSON parser.</p>
+     * <p><b>{@code tag_name} only.</b> This hand-rolled {@code indexOf} parser
+     * does not handle escaped quotes, unicode escapes, nested objects, or
+     * whitespace; it is safe here only because {@code tag_name} is independently
+     * constrained by {@link #RELEASE_TAG_PATTERN}. For any other field, add a
+     * real JSON parser rather than extending this.</p>
      *
      * @param json The JSON string
      * @param key The key to extract
@@ -268,8 +247,7 @@ public class UpdateChecker {
         try {
             return Integer.parseInt(numeric.toString());
         } catch (NumberFormatException e) {
-            // Handle overflow or invalid number
-            // Only log safe, sanitized information to prevent log injection
+            // Log message is static (no user input) to avoid log injection.
             plugin.getLogger().warning("Failed to parse version number: invalid numeric format");
             return 0;
         }

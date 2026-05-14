@@ -6,21 +6,14 @@ import org.jetbrains.annotations.NotNull;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 
 /**
- * PlaceholderAPI expansion exposing StormtrooperX state.
+ * PlaceholderAPI expansion exposing StormtrooperX state. Registered at plugin
+ * enable when PlaceholderAPI is present; {@link #persist()} keeps it across
+ * {@code /papi reload}.
  *
- * <p>Available placeholders:</p>
- * <ul>
- *   <li>{@code %stormtrooperx_optout%} — {@code "true"} or {@code "false"}
- *       indicating whether the player has opted out of mob accuracy nerfs.
- *       <b>Online-only:</b> backed by {@link OptOutManager#isOptedOut(java.util.UUID)},
- *       which only consults the in-memory cache populated for online players.
- *       Offline players will resolve to {@code "false"} even if their
- *       persisted state is "opted out". Tools that need persisted state for
- *       offline players should query the database directly.</li>
- * </ul>
- *
- * <p>Registered conditionally at plugin enable when PlaceholderAPI is present.
- * {@link #persist()} returns true so the expansion survives {@code /papi reload}.</p>
+ * <p>{@code %stormtrooperx_optout%} — {@code "true"}/{@code "false"} for whether
+ * the player has opted out. <b>Online-only:</b> backed by
+ * {@link OptOutManager#isOptedOut(java.util.UUID)}, so offline players resolve
+ * to {@code "false"} regardless of persisted state.</p>
  */
 public class StormtrooperXExpansion extends PlaceholderExpansion {
 
