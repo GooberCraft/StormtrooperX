@@ -52,11 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added logger verification on `OptOutManager` exception paths so silently-swallowed DB failures fail the test.
 - Expanded `UpdateCheckerTest` to cover `validateReleaseTag` accept/reject sets (semver shapes, CR/LF injection, metacharacters, segment counts).
 
+### Dependencies
+- Bumped `me.clip:placeholderapi` from `2.11.6` to `2.12.2` (minor; `provided` scope, soft dependency — not shaded into the JAR).
+
 ### Build
 - Pinned all `release.yml` actions to commit SHAs (with `# vX.Y.Z` trailers) instead of mutable major tags — the release job holds `id-token`/`attestations: write` scope. No functional change; Dependabot keeps the pins current.
 - Added a CycloneDX SBOM (`cyclonedx-maven-plugin`) on the `verify` phase; `release.yml` uploads `bom.xml`/`bom.json` alongside the JAR.
 - `DatabaseManager` uses `Locale.ROOT` for the `databaseType` case fold.
-- Removed the deprecated `reviewers:` field from `dependabot.yml`.
+- Removed the deprecated `reviewers:` field from `dependabot.yml`, and the stale `org.junit.jupiter:* >=6.0.0` ignore rule (a leftover from the Java 11 era — the project is on Java 17 and junit 6.x now, so the rule only blocked junit 6.x patch updates).
 
 ## [1.9.0] - 2026-05-13
 

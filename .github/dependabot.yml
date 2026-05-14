@@ -17,10 +17,6 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
-    # JUnit Jupiter 6.x requires Java 17+; keep on 5.x while targeting Java 11
-    ignore:
-      - dependency-name: "org.junit.jupiter:*"
-        versions: [">=6.0.0"]
     # Group minor and patch updates together
     groups:
       test-dependencies:
