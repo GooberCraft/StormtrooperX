@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `support/` test package: `TestSupport` (reflective field injection + private-method invocation helper) and `InlinePluginScheduler` (shared inline scheduler stub) replace duplicated boilerplate across four test classes.
 - Added `src/test/resources/fixtures/config-v2.yml` and `config-v3.yml`; `ConfigMigrationTest` now exercises real YAML load -> migrate -> assert in addition to the existing mock-based verifications.
 - Added missing logger verification on `OptOutManager` exception paths so silently-swallowed DB failures will fail the test.
+- New `UpdateCheckerTest` cases (13 total) covering `validateReleaseTag` accept and reject sets — semver shape with optional `v` prefix, pre-release / build suffixes, 1–4 segment counts, and rejection of null/empty input, CR/LF injection, whitespace, HTML and shell metacharacters, 5+ segments, and non-numeric leading segments.
 
 ### Added
 - Permission-aware tab completion for `/stormtrooperx`. The first argument completes to only the subcommands the sender is allowed to run, and the second argument of `optout`/`optin` completes to online player names for admins with `stormtrooperx.optout.others`.
@@ -34,6 +35,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `stormtrooperx.use` default changed from `op` to `true` so non-op players can actually invoke `/stormtrooperx optout` (which is itself `default: true`). Previously the command itself was gated at the Bukkit layer, making the `optout` permission unreachable for non-ops.
 - `/stormtrooperx optout` no longer toggles. It now always sets the player to opted-out (idempotent). Use `/stormtrooperx toggle` for the previous flip behavior; `toggle` was already an alias for `optout` so existing muscle memory still works.
+- `onBowShoot` now declares `@EventHandler(ignoreCancelled = true)` so the projectile-perturbation work is skipped when an upstream plugin (region protection, anti-cheat, etc.) cancels `EntityShootBowEvent`.
+- HikariCP MySQL pool now sets the MySQL Connector/J performance properties recommended by the HikariCP wiki: `useServerPrepStmts`, `useLocalSessionState`, `rewriteBatchedStatements`, `cacheResultSetMetadata`, `cacheServerConfiguration`, `elideSetAutoCommits`, and `maintainTimeStats=false`. No config-file change required; the existing `cachePrepStmts` / `prepStmtCacheSize` / `prepStmtCacheSqlLimit` are kept.
+- Internal hot-path micro-optimizations: zero-velocity guard in `onBowShoot` uses `lengthSquared()` to skip an unnecessary `sqrt`; the projectile reference is cached for its two uses; `DatabaseManager` caches a `boolean isH2` field at construction to replace per-operation `String#equals` against `databaseType`; tab completion assembles candidates from pre-sorted permission-tier pools and drops `Collections.sort`; pattern-matching `instanceof` replaces the explicit `Mob` / `Player` / `Player`-from-`CommandSender` casts.
+
+### Fixed
+- Folia regional-thread safety on `/stormtrooperx reload`. `entityConfigs` and `debug` are now `volatile`, and `loadConfiguration` builds a fresh `EnumMap` and assigns it as a single reference write rather than mutating the published map. Previously the `clear()` + per-entity `put()` sequence created a window where a Folia regional thread handling `EntityShootBowEvent` could observe a partially populated map and either skip nerfing or read stale state.
+
+### Security
+- Closed a CWE-117 log-injection vector in `UpdateChecker` (CodeQL alert #3). Release tags returned by the GitHub Releases API are now validated against a strict `^v?\d+(\.\d+){0,3}([-+][A-Za-z0-9.-]+)?$` shape by a new `validateReleaseTag` barrier before they can reach the logger or `compareVersions`. A tampered release page (or a successful TLS interception) can no longer forge log entries via CR/LF in `tag_name`; malformed tags are dropped at the source and the update check logs a generic warning instead of the offending value. As a side effect, `parseVersionPart` is no longer reachable with malformed input.
 
 ## [1.9.0] - 2026-05-13
 
