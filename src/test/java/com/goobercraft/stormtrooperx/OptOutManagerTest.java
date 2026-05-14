@@ -12,29 +12,19 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
+import com.goobercraft.stormtrooperx.support.InlinePluginScheduler;
 
 /**
  * Unit tests for OptOutManager.
  */
+@DisplayName("OptOutManager — cache + persistence coordinator")
 public class OptOutManagerTest {
-
-    /** Runs scheduled tasks inline on the caller thread for deterministic testing. */
-    private static final class InlinePluginScheduler implements PluginScheduler {
-        @Override
-        public void runAsync(Runnable task) {
-            task.run();
-        }
-
-        @Override
-        public void runGlobal(Runnable task) {
-            task.run();
-        }
-    }
 
     @Mock
     private Logger logger;
@@ -314,6 +304,8 @@ public class OptOutManagerTest {
 
         // Cache should remain empty
         assertEquals(0, optOutManager.getCacheSize(), "Cache should be empty after exception");
+        // The failure must be visible in logs — swallowing silently would hide DB outages
+        verify(logger).log(eq(Level.WARNING), anyString(), any(Throwable.class));
     }
 
     @Test

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Extracted the projectile-perturbation math out of `StormtrooperX.onBowShoot` into a package-private `ProjectileNerf.perturb(Vector, double, Supplier<Vector>)` helper. The random source is now injectable, making the speed-preserving math testable without a Bukkit event mock. Behavior is unchanged.
+- `EntityConfig` widened from `private` to package-private so tests can construct it directly instead of through reflection.
+
+### Tests
+- Added AssertJ (`assertj-core 3.27.3`) as a test dependency for fluent assertions and richer failure messages.
+- Added a Jacoco package-level **branch coverage** rule (`BRANCH COVEREDRATIO >= 0.50`) alongside the existing line-coverage rule. Current coverage: 72% line / 75% branch.
+- `.github/workflows/build.yml` and `release.yml` now run `mvn clean verify` instead of `mvn clean package` so the Jacoco gate is actually enforced in CI (`jacoco:check` is bound to the `verify` phase by default — the previous `package` runs never invoked it).
+- Reorganized large test classes with JUnit 5 `@Nested` groups and `@DisplayName` for readable reports (Surefire, IDE).
+- Converted obvious repeat-shape tests in `UpdateCheckerTest`, `DatabaseManagerMySQLTest`, and `StormtrooperXTest` to `@ParameterizedTest` (`@CsvSource` / `@ValueSource` / `@NullAndEmptySource`).
+- New `ProjectileNerfTest` for the extracted pure function — verifies speed preservation, zero-velocity guard, mutation semantics, and accuracy clamping behavior with a deterministic random source.
+- New `support/` test package: `TestSupport` (reflective field injection + private-method invocation helper) and `InlinePluginScheduler` (shared inline scheduler stub) replace duplicated boilerplate across four test classes.
+- Added `src/test/resources/fixtures/config-v2.yml` and `config-v3.yml`; `ConfigMigrationTest` now exercises real YAML load -> migrate -> assert in addition to the existing mock-based verifications.
+- Added missing logger verification on `OptOutManager` exception paths so silently-swallowed DB failures will fail the test.
+
 ### Added
 - Permission-aware tab completion for `/stormtrooperx`. The first argument completes to only the subcommands the sender is allowed to run, and the second argument of `optout`/`optin` completes to online player names for admins with `stormtrooperx.optout.others`.
 - `/stormtrooperx help` subcommand that lists the commands the sender is permitted to run.

@@ -10,6 +10,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * deterministically returns the legacy implementation.</p>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("PluginScheduler — factory + LegacyBukkitScheduler delegation")
 class PluginSchedulerTest {
 
     @Mock

@@ -1,5 +1,6 @@
 package com.goobercraft.stormtrooperx;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
@@ -11,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for plugin resources to ensure Maven resource filtering works correctly.
  */
+@DisplayName("plugin.yml resource — Maven filtering + semver validation")
 class PluginResourceTest {
 
     /**

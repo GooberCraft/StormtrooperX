@@ -1,0 +1,45 @@
+# Test fixture: StormtrooperX config schema v3 (current).
+# Mirrors the shape produced by migrateConfigToV3() and shipped in
+# src/main/resources/config.yml. Used by ConfigMigrationTest as the
+# expected post-migration state.
+
+config-version: 3
+
+database:
+  type: h2
+  mysql:
+    host: localhost
+    port: 3306
+    database: stormtrooperx
+    username: root
+    password: ''
+    pool:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+    properties: {}
+
+entities:
+  skeleton:
+    enabled: true
+    accuracy: 0.7
+  stray:
+    enabled: true
+    accuracy: 0.7
+  bogged:
+    enabled: true
+    accuracy: 0.7
+  parched:
+    enabled: true
+    accuracy: 0.7
+  pillager:
+    enabled: true
+    accuracy: 0.7
+  piglin:
+    enabled: true
+    accuracy: 0.7
+
+check-for-updates: true
+debug: false

@@ -54,8 +54,11 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
 
     /**
      * Configuration for a specific entity type.
+     *
+     * <p>Package-private so tests in the same package can instantiate it
+     * directly without reflection.</p>
      */
-    private static class EntityConfig {
+    static class EntityConfig {
         private final boolean enabled;
         private final double accuracy;
 
@@ -583,27 +586,18 @@ public final class StormtrooperX extends JavaPlugin implements Listener, TabComp
             }
         }
 
-        // Get projectile velocity and preserve original speed
+        // Get projectile velocity and guard against zero-length (normalize would NaN)
         final Vector velocity = event.getProjectile().getVelocity();
-        final double originalSpeed = velocity.length();
-
-        // Guard against zero-length velocity (normalize would produce NaN)
-        if (originalSpeed == 0) {
+        if (velocity.length() == 0) {
             if (debug) {
                 logger.info("Skipping projectile with zero velocity from " + entityType);
             }
             return;
         }
 
-        // Generate random deviation scaled by accuracy factor
-        // Note: accuracy is already clamped to [0.0, 1.0] in EntityConfig constructor
-        final Vector deviation = Vector.getRandom();
-        deviation.multiply(config.getAccuracy());
-
-        // Apply deviation and restore original speed
-        velocity.add(deviation);
-        velocity.normalize();
-        velocity.multiply(originalSpeed);
+        // Delegate the speed-preserving direction perturbation to the pure helper.
+        // accuracy is already clamped to [0.0, 1.0] in EntityConfig constructor.
+        ProjectileNerf.perturb(velocity, config.getAccuracy(), Vector::getRandom);
         event.getProjectile().setVelocity(velocity);
 
         if (debug) {

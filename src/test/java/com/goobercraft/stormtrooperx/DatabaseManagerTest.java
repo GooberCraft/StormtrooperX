@@ -2,6 +2,7 @@ package com.goobercraft.stormtrooperx;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -12,8 +13,9 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for DatabaseManager.
+ * Unit tests for DatabaseManager (H2 embedded path).
  */
+@DisplayName("DatabaseManager — H2 embedded persistence")
 class DatabaseManagerTest {
 
     private DatabaseManager databaseManager;

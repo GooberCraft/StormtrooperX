@@ -46,9 +46,10 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-maven-build-${{ matrix.java-version }}-
 
-    # Combined: Build and test in one command (saves ~30-50% build time)
-    - name: Build and test
-      run: mvn clean package
+    # Combined: Build, test, and enforce Jacoco coverage gate in one command.
+    # `verify` is required (not `package`) because jacoco:check is bound to the verify phase.
+    - name: Build, test, and verify coverage
+      run: mvn clean verify
 
     # Only publish test results from Java 17 build (reduces noise)
     - name: Publish test results

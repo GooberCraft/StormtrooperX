@@ -1,26 +1,6 @@
 package com.goobercraft.stormtrooperx;
 
-import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.entity.EntityType;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.logging.Logger;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
@@ -30,214 +10,192 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.EnumMap;
+import java.util.logging.Logger;
+
+import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.EntityType;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import com.goobercraft.stormtrooperx.support.TestSupport;
+
+/**
+ * Tests for {@code StormtrooperX.loadEntityConfig} and
+ * {@code displayEntityStatus}. Reaches the private methods via
+ * {@link TestSupport#invokePrivate}.
+ */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("StormtrooperX — per-entity config loading + status display")
 class EntityConfigLoadingTest {
 
     private StormtrooperX plugin;
     private FileConfiguration mockConfig;
-    private Map<EntityType, Object> entityConfigs;
-    private Method loadEntityConfigDirect;
-    private Method loadEntityConfigVersioned;
-    private Method displayEntityStatusDirect;
-    private Field accuracyField;
-    private Field enabledField;
+    private EnumMap<EntityType, StormtrooperX.EntityConfig> entityConfigs;
 
-    @SuppressWarnings("unchecked")
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         plugin = mock(StormtrooperX.class, CALLS_REAL_METHODS);
 
-        // Inject a real logger — loadEntityConfig logs at info and warning levels
-        Field loggerField = StormtrooperX.class.getDeclaredField("logger");
-        loggerField.setAccessible(true);
-        loggerField.set(plugin, Logger.getLogger("EntityConfigLoadingTest"));
-
-        // Inject empty entityConfigs map — field initializer is skipped by Mockito
-        Field entityConfigsField = StormtrooperX.class.getDeclaredField("entityConfigs");
-        entityConfigsField.setAccessible(true);
+        TestSupport.inject(plugin, "logger", Logger.getLogger("EntityConfigLoadingTest"));
         entityConfigs = new EnumMap<>(EntityType.class);
-        entityConfigsField.set(plugin, entityConfigs);
+        TestSupport.inject(plugin, "entityConfigs", entityConfigs);
 
-        // Stub getConfig() — must use doReturn because CALLS_REAL_METHODS would
-        // otherwise invoke the real (NPE-prone) getConfig() during stub registration
+        // doReturn() is mandatory under CALLS_REAL_METHODS — when/thenReturn would invoke
+        // the real getConfig() during stub registration and NPE without a loaded plugin.
         mockConfig = mock(FileConfiguration.class);
         doReturn(mockConfig).when(plugin).getConfig();
+    }
 
-        // Resolve private methods
-        loadEntityConfigDirect = StormtrooperX.class.getDeclaredMethod(
-                "loadEntityConfig", String.class, EntityType.class);
-        loadEntityConfigDirect.setAccessible(true);
+    // -------------------------------------------------------------------------
 
-        loadEntityConfigVersioned = StormtrooperX.class.getDeclaredMethod(
-                "loadEntityConfig", String.class, String.class, String.class);
-        loadEntityConfigVersioned.setAccessible(true);
+    @Nested
+    @DisplayName("loadEntityConfig(name, type) — non-version-gated (Skeleton/Stray)")
+    class LoadDirect {
 
-        displayEntityStatusDirect = StormtrooperX.class.getDeclaredMethod(
-                "displayEntityStatus", CommandSender.class, EntityType.class, String.class);
-        displayEntityStatusDirect.setAccessible(true);
+        @Test
+        @DisplayName("config path missing -> no entry")
+        void pathMissing() {
+            when(mockConfig.contains("entities.skeleton")).thenReturn(false);
 
-        // Resolve EntityConfig fields for assertions
-        Class<?> entityConfigClass = null;
-        for (Class<?> inner : StormtrooperX.class.getDeclaredClasses()) {
-            if ("EntityConfig".equals(inner.getSimpleName())) {
-                entityConfigClass = inner;
-                break;
-            }
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", "skeleton", EntityType.SKELETON);
+
+            assertThat(entityConfigs).isEmpty();
         }
-        accuracyField = entityConfigClass.getDeclaredField("accuracy");
-        accuracyField.setAccessible(true);
-        enabledField = entityConfigClass.getDeclaredField("enabled");
-        enabledField.setAccessible(true);
-    }
 
-    private double getAccuracy(Object entityConfig) throws Exception {
-        return (double) accuracyField.get(entityConfig);
-    }
+        @Test
+        @DisplayName("enabled + valid accuracy -> entry with that accuracy is added")
+        void enabledValidAccuracy() {
+            when(mockConfig.contains("entities.skeleton")).thenReturn(true);
+            when(mockConfig.getBoolean("entities.skeleton.enabled", true)).thenReturn(true);
+            when(mockConfig.getDouble("entities.skeleton.accuracy", 0.7)).thenReturn(0.5);
 
-    private boolean getEnabled(Object entityConfig) throws Exception {
-        return (boolean) enabledField.get(entityConfig);
-    }
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", "skeleton", EntityType.SKELETON);
 
-    // -------------------------------------------------------------------------
-    // loadEntityConfig(String, EntityType) — direct/non-version-gated variant
-    // Used for Skeleton and Stray (mobs guaranteed to exist on the 1.18 baseline)
-    // -------------------------------------------------------------------------
+            final StormtrooperX.EntityConfig cfg = entityConfigs.get(EntityType.SKELETON);
+            assertThat(cfg).isNotNull();
+            assertThat(cfg.isEnabled()).isTrue();
+            assertThat(cfg.getAccuracy()).isEqualTo(0.5);
+        }
 
-    @Test
-    void testLoadDirect_pathMissing_doesNotAddEntry() throws Exception {
-        when(mockConfig.contains("entities.skeleton")).thenReturn(false);
+        @Test
+        @DisplayName("disabled in config -> no entry added")
+        void disabled() {
+            when(mockConfig.contains("entities.skeleton")).thenReturn(true);
+            when(mockConfig.getBoolean("entities.skeleton.enabled", true)).thenReturn(false);
+            when(mockConfig.getDouble("entities.skeleton.accuracy", 0.7)).thenReturn(0.7);
 
-        loadEntityConfigDirect.invoke(plugin, "skeleton", EntityType.SKELETON);
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", "skeleton", EntityType.SKELETON);
 
-        assertTrue(entityConfigs.isEmpty(), "No config path → no entry added");
-    }
+            assertThat(entityConfigs).doesNotContainKey(EntityType.SKELETON);
+        }
 
-    @Test
-    void testLoadDirect_enabledWithValidAccuracy_addsEntry() throws Exception {
-        when(mockConfig.contains("entities.skeleton")).thenReturn(true);
-        when(mockConfig.getBoolean("entities.skeleton.enabled", true)).thenReturn(true);
-        when(mockConfig.getDouble("entities.skeleton.accuracy", 0.7)).thenReturn(0.5);
+        @Test
+        @DisplayName("out-of-range accuracy is clamped to 1.0 at construction time")
+        void outOfRangeAccuracyClamps() {
+            when(mockConfig.contains("entities.skeleton")).thenReturn(true);
+            when(mockConfig.getBoolean("entities.skeleton.enabled", true)).thenReturn(true);
+            when(mockConfig.getDouble("entities.skeleton.accuracy", 0.7)).thenReturn(2.5);
 
-        loadEntityConfigDirect.invoke(plugin, "skeleton", EntityType.SKELETON);
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", "skeleton", EntityType.SKELETON);
 
-        Object cfg = entityConfigs.get(EntityType.SKELETON);
-        assertNotNull(cfg, "Enabled entity must be added to map");
-        assertEquals(0.5, getAccuracy(cfg), 1e-10);
-        assertTrue(getEnabled(cfg));
-    }
-
-    @Test
-    void testLoadDirect_disabled_doesNotAddEntry() throws Exception {
-        when(mockConfig.contains("entities.skeleton")).thenReturn(true);
-        when(mockConfig.getBoolean("entities.skeleton.enabled", true)).thenReturn(false);
-        when(mockConfig.getDouble("entities.skeleton.accuracy", 0.7)).thenReturn(0.7);
-
-        loadEntityConfigDirect.invoke(plugin, "skeleton", EntityType.SKELETON);
-
-        assertNull(entityConfigs.get(EntityType.SKELETON),
-                "Disabled entity must not be added to map");
-    }
-
-    @Test
-    void testLoadDirect_outOfRangeAccuracy_isClampedAtConstruction() throws Exception {
-        when(mockConfig.contains("entities.skeleton")).thenReturn(true);
-        when(mockConfig.getBoolean("entities.skeleton.enabled", true)).thenReturn(true);
-        when(mockConfig.getDouble("entities.skeleton.accuracy", 0.7)).thenReturn(2.5);
-
-        loadEntityConfigDirect.invoke(plugin, "skeleton", EntityType.SKELETON);
-
-        Object cfg = entityConfigs.get(EntityType.SKELETON);
-        assertNotNull(cfg);
-        assertEquals(1.0, getAccuracy(cfg), 1e-10,
-                "Out-of-range accuracy (2.5) must be clamped to 1.0");
+            assertThat(entityConfigs.get(EntityType.SKELETON).getAccuracy()).isEqualTo(1.0);
+        }
     }
 
     // -------------------------------------------------------------------------
-    // loadEntityConfig(String, String, String) — version-gated variant
-    // Used for Bogged (1.21+), Parched (1.21.11+), Pillager (1.14+), Piglin (1.16+)
+
+    @Nested
+    @DisplayName("loadEntityConfig(name, type-string, minVersion) — version-gated mobs")
+    class LoadVersioned {
+
+        @Test
+        @DisplayName("config path missing -> no entry")
+        void pathMissing() {
+            when(mockConfig.contains("entities.bogged")).thenReturn(false);
+
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", "bogged", "BOGGED", "1.21+");
+
+            assertThat(entityConfigs).isEmpty();
+        }
+
+        @Test
+        @DisplayName("disabled -> returns before reading accuracy or resolving EntityType")
+        void disabledShortCircuits() {
+            when(mockConfig.contains("entities.bogged")).thenReturn(true);
+            when(mockConfig.getBoolean("entities.bogged.enabled", true)).thenReturn(false);
+
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", "bogged", "BOGGED", "1.21+");
+
+            assertThat(entityConfigs).isEmpty();
+            verify(mockConfig, never()).getDouble(anyString(), anyDouble());
+        }
+
+        @Test
+        @DisplayName("known EntityType -> entry added with configured accuracy")
+        void knownEntityType() {
+            when(mockConfig.contains("entities.pillager")).thenReturn(true);
+            when(mockConfig.getBoolean("entities.pillager.enabled", true)).thenReturn(true);
+            when(mockConfig.getDouble("entities.pillager.accuracy", 0.7)).thenReturn(0.8);
+
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", "pillager", "PILLAGER", "1.14+");
+
+            final StormtrooperX.EntityConfig cfg = entityConfigs.get(EntityType.PILLAGER);
+            assertThat(cfg).isNotNull();
+            assertThat(cfg.isEnabled()).isTrue();
+            assertThat(cfg.getAccuracy()).isEqualTo(0.8);
+        }
+
+        @Test
+        @DisplayName("unknown EntityType (running on an older MC) -> graceful skip, no exception")
+        void unknownEntityType() {
+            when(mockConfig.contains("entities.fictional")).thenReturn(true);
+            when(mockConfig.getBoolean("entities.fictional.enabled", true)).thenReturn(true);
+
+            // Same path Parched takes on a 1.21.10 server.
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", "fictional", "NOT_A_REAL_ENTITY_TYPE_XYZ", "9.99+");
+
+            assertThat(entityConfigs).isEmpty();
+        }
+
+        @Test
+        @DisplayName("negative accuracy is clamped to 0.0")
+        void negativeAccuracyClamps() {
+            when(mockConfig.contains("entities.pillager")).thenReturn(true);
+            when(mockConfig.getBoolean("entities.pillager.enabled", true)).thenReturn(true);
+            when(mockConfig.getDouble("entities.pillager.accuracy", 0.7)).thenReturn(-0.5);
+
+            TestSupport.invokePrivate(plugin, "loadEntityConfig", "pillager", "PILLAGER", "1.14+");
+
+            assertThat(entityConfigs.get(EntityType.PILLAGER).getAccuracy()).isEqualTo(0.0);
+        }
+    }
+
     // -------------------------------------------------------------------------
 
-    @Test
-    void testLoadVersioned_pathMissing_doesNotAddEntry() throws Exception {
-        when(mockConfig.contains("entities.bogged")).thenReturn(false);
+    @Nested
+    @DisplayName("displayEntityStatus — disabled branch")
+    class DisplayEntityStatus {
 
-        loadEntityConfigVersioned.invoke(plugin, "bogged", "BOGGED", "1.21+");
+        @Test
+        @DisplayName("entity not in map -> sender sees 'Disabled' message")
+        void entityNotConfigured() {
+            final CommandSender sender = mock(CommandSender.class);
 
-        assertTrue(entityConfigs.isEmpty());
-    }
+            TestSupport.invokePrivate(plugin, "displayEntityStatus", sender, EntityType.SKELETON, "Skeleton");
 
-    @Test
-    void testLoadVersioned_disabled_earlyReturnsBeforeEntityTypeLookup() throws Exception {
-        when(mockConfig.contains("entities.bogged")).thenReturn(true);
-        when(mockConfig.getBoolean("entities.bogged.enabled", true)).thenReturn(false);
-
-        loadEntityConfigVersioned.invoke(plugin, "bogged", "BOGGED", "1.21+");
-
-        assertTrue(entityConfigs.isEmpty(),
-                "Disabled version-gated entity must not be added");
-        // Disabled path returns before reading accuracy or attempting EntityType lookup
-        verify(mockConfig, never()).getDouble(anyString(), anyDouble());
-    }
-
-    @Test
-    void testLoadVersioned_validEntityType_addsEntry() throws Exception {
-        when(mockConfig.contains("entities.pillager")).thenReturn(true);
-        when(mockConfig.getBoolean("entities.pillager.enabled", true)).thenReturn(true);
-        when(mockConfig.getDouble("entities.pillager.accuracy", 0.7)).thenReturn(0.8);
-
-        loadEntityConfigVersioned.invoke(plugin, "pillager", "PILLAGER", "1.14+");
-
-        Object cfg = entityConfigs.get(EntityType.PILLAGER);
-        assertNotNull(cfg, "Valid EntityType name must result in an entry");
-        assertEquals(0.8, getAccuracy(cfg), 1e-10);
-        assertTrue(getEnabled(cfg));
-    }
-
-    @Test
-    void testLoadVersioned_unknownEntityType_silentlySkips() throws Exception {
-        when(mockConfig.contains("entities.fictional")).thenReturn(true);
-        when(mockConfig.getBoolean("entities.fictional.enabled", true)).thenReturn(true);
-
-        // This is the same path Parched takes on a 1.21.10 server: EntityType.valueOf()
-        // throws IllegalArgumentException, which must be caught and logged.
-        loadEntityConfigVersioned.invoke(plugin, "fictional", "NOT_A_REAL_ENTITY_TYPE_XYZ", "9.99+");
-
-        assertTrue(entityConfigs.isEmpty(),
-                "Unknown EntityType must result in graceful skip, not exception");
-    }
-
-    @Test
-    void testLoadVersioned_outOfRangeNegativeAccuracy_isClampedToZero() throws Exception {
-        when(mockConfig.contains("entities.pillager")).thenReturn(true);
-        when(mockConfig.getBoolean("entities.pillager.enabled", true)).thenReturn(true);
-        when(mockConfig.getDouble("entities.pillager.accuracy", 0.7)).thenReturn(-0.5);
-
-        loadEntityConfigVersioned.invoke(plugin, "pillager", "PILLAGER", "1.14+");
-
-        Object cfg = entityConfigs.get(EntityType.PILLAGER);
-        assertNotNull(cfg);
-        assertEquals(0.0, getAccuracy(cfg), 1e-10,
-                "Negative accuracy (-0.5) must be clamped to 0.0");
-    }
-
-    // -------------------------------------------------------------------------
-    // displayEntityStatus(CommandSender, EntityType, String) — disabled branch
-    // -------------------------------------------------------------------------
-
-    @Test
-    void testDisplayEntityStatus_entityNotConfigured_showsDisabled() throws Exception {
-        CommandSender sender = mock(CommandSender.class);
-        // entityConfigs is empty — no entry for SKELETON, so config is null
-        // and the else branch (Disabled) is taken.
-
-        displayEntityStatusDirect.invoke(plugin, sender, EntityType.SKELETON, "Skeleton");
-
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(sender).sendMessage(captor.capture());
-        assertTrue(captor.getValue().contains("Disabled"),
-                "Message must indicate Disabled when entity has no config entry");
-        assertTrue(captor.getValue().contains("Skeleton"),
-                "Message must include the display name");
+            final ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+            verify(sender).sendMessage(captor.capture());
+            assertThat(captor.getValue()).contains("Disabled").contains("Skeleton");
+        }
     }
 }

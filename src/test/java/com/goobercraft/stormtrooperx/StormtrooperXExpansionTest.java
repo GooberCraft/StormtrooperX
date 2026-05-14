@@ -3,6 +3,7 @@ package com.goobercraft.stormtrooperx;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -17,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("StormtrooperXExpansion — PlaceholderAPI bridge")
 class StormtrooperXExpansionTest {
 
     private StormtrooperX plugin;

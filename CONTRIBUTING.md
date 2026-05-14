@@ -215,6 +215,7 @@ StormtrooperX/
 │   │   ├── java/
 │   │   │   └── com/goobercraft/stormtrooperx/
 │   │   │       ├── StormtrooperX.java           # Main plugin class, event handler, command dispatch
+│   │   │       ├── ProjectileNerf.java          # Pure-function speed-preserving direction perturbation
 │   │   │       ├── DatabaseManager.java         # H2 (embedded) and MySQL (HikariCP) persistence
 │   │   │       ├── OptOutManager.java           # Cached, async opt-out facade over DatabaseManager
 │   │   │       ├── StormtrooperXExpansion.java  # PlaceholderAPI expansion (registered if PAPI is present)
@@ -224,7 +225,12 @@ StormtrooperX/
 │   │       ├── config.yml                  # Default configuration
 │   │       └── plugin.yml                  # Plugin metadata
 │   └── test/
-│       └── java/                           # JUnit tests
+│       ├── java/
+│       │   └── com/goobercraft/stormtrooperx/
+│       │       ├── *Test.java                   # JUnit Jupiter tests (mirrors main package layout)
+│       │       └── support/                     # Reusable test helpers (TestSupport, InlinePluginScheduler)
+│       └── resources/
+│           └── fixtures/                        # YAML config-schema fixtures (config-v2.yml, config-v3.yml)
 ├── pom.xml                 # Maven configuration
 ├── README.md
 ├── CHANGELOG.md
@@ -255,9 +261,12 @@ StormtrooperX/
 
 ### Unit Tests
 - Write tests for new features
-- Maintain or improve code coverage
-- Use JUnit Jupiter (6.x)
+- Maintain or improve code coverage. Jacoco enforces **line >= 60% AND branch >= 50%** per package
+- Use JUnit Jupiter (6.x); prefer AssertJ (`assertThat(...)`) over raw `Assertions.*` for new assertions
+- Group related tests with `@Nested` classes; tag classes and tricky cases with `@DisplayName`
+- Use `@ParameterizedTest` (`@CsvSource` / `@ValueSource` / `@NullAndEmptySource`) for repeat-shape cases instead of copy-pasted methods
 - Mock Bukkit objects with Mockito when needed
+- For reflective access to private members, use the helpers in `com.goobercraft.stormtrooperx.support.TestSupport` (`inject(...)`, `invokePrivate(...)`); for inline scheduling in async paths use `support.InlinePluginScheduler`
 
 Example test structure:
 ```java

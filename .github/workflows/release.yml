@@ -24,9 +24,10 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    # Build with tests in one command
+    # Build, test, and enforce Jacoco coverage gate. `verify` is required (not `package`)
+    # because jacoco:check is bound to the verify phase.
     - name: Build with Maven
-      run: mvn clean package
+      run: mvn clean verify
 
     # Extract version from git tag instead of running Maven
     - name: Get version from tag

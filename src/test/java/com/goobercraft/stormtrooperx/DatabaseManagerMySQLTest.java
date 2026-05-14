@@ -1,491 +1,338 @@
 package com.goobercraft.stormtrooperx;
 
-import org.bukkit.configuration.ConfigurationSection;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.logging.Logger;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.bukkit.configuration.ConfigurationSection;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * Tests for MySQL-specific functionality in DatabaseManager.
- * These tests use mocks to verify MySQL configuration, JDBC URL construction,
- * and SQL syntax without requiring a running MySQL server.
+ * Tests for MySQL-specific functionality in {@link DatabaseManager}. Uses
+ * mocked {@link ConfigurationSection} instances so no real MySQL server is
+ * required; covers constructor validation, JDBC-URL injection guards, and
+ * the pool/timeout clamping helpers.
  */
+@DisplayName("DatabaseManager — MySQL configuration, validation, and security")
 class DatabaseManagerMySQLTest {
 
-    private Logger logger = Logger.getLogger("TestLogger");
-    private File tempDir = new File(System.getProperty("java.io.tmpdir"));
+    private final Logger logger = Logger.getLogger("DatabaseManagerMySQLTest");
+    private final File tempDir = new File(System.getProperty("java.io.tmpdir"));
 
-    @Test
-    void testMySQLConstructor_requiresConfig() {
-        // MySQL type requires mysqlConfig parameter
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new DatabaseManager(logger, tempDir, "mysql", null)
-        );
-
-        assertTrue(exception.getMessage().contains("mysqlConfig is required"));
+    /** Builds a mock mysql config with the supplied host/port/db/user/password and no pool/properties sections. */
+    private ConfigurationSection mysqlConfig(String host, int port, String database, String username, String password) {
+        final ConfigurationSection cfg = mock(ConfigurationSection.class);
+        when(cfg.getString("host", "localhost")).thenReturn(host);
+        when(cfg.getInt("port", 3306)).thenReturn(port);
+        when(cfg.getString("database", "stormtrooperx")).thenReturn(database);
+        when(cfg.getString("username", "root")).thenReturn(username);
+        when(cfg.getString("password", "")).thenReturn(password);
+        when(cfg.getConfigurationSection("pool")).thenReturn(null);
+        when(cfg.getConfigurationSection("properties")).thenReturn(null);
+        return cfg;
     }
 
-    @Test
-    void testConstructor_invalidDatabaseType() {
-        // Invalid database type should throw exception
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new DatabaseManager(logger, tempDir, "postgres", null)
-        );
-
-        assertTrue(exception.getMessage().contains("must be 'h2' or 'mysql'"));
+    /** Default-shape mysql config (the most common test fixture). */
+    private ConfigurationSection defaultMysqlConfig() {
+        return mysqlConfig("localhost", 3306, "stormtrooperx", "root", "");
     }
 
-    @Test
-    void testConstructor_nullDatabaseType() {
-        // Null database type should throw exception
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new DatabaseManager(logger, tempDir, null, null)
-        );
+    // -------------------------------------------------------------------------
+    // Constructor argument validation
+    // -------------------------------------------------------------------------
 
-        assertTrue(exception.getMessage().contains("databaseType cannot be null"));
+    @Nested
+    @DisplayName("constructor argument validation")
+    class ConstructorValidation {
+
+        @Test
+        @DisplayName("rejects null logger")
+        void nullLogger() {
+            assertThatThrownBy(() -> new DatabaseManager(null, tempDir, "h2", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("logger cannot be null");
+        }
+
+        @Test
+        @DisplayName("rejects null dataFolder")
+        void nullDataFolder() {
+            assertThatThrownBy(() -> new DatabaseManager(logger, null, "h2", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("dataFolder cannot be null");
+        }
+
+        @Test
+        @DisplayName("rejects null databaseType")
+        void nullDatabaseType() {
+            assertThatThrownBy(() -> new DatabaseManager(logger, tempDir, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("databaseType cannot be null");
+        }
+
+        @Test
+        @DisplayName("rejects empty databaseType")
+        void emptyDatabaseType() {
+            assertThatThrownBy(() -> new DatabaseManager(logger, tempDir, "", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("databaseType cannot be null or empty");
+        }
+
+        @Test
+        @DisplayName("rejects unknown databaseType (e.g., 'postgres')")
+        void invalidDatabaseType() {
+            assertThatThrownBy(() -> new DatabaseManager(logger, tempDir, "postgres", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must be 'h2' or 'mysql'");
+        }
+
+        @Test
+        @DisplayName("rejects mysql type without a config section")
+        void mysqlWithoutConfig() {
+            assertThatThrownBy(() -> new DatabaseManager(logger, tempDir, "mysql", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mysqlConfig is required");
+        }
+
+        @ParameterizedTest(name = "accepts databaseType=[{0}] case-insensitively")
+        @ValueSource(strings = {"h2", "H2"})
+        void h2CaseInsensitive(String type) {
+            assertThat(new DatabaseManager(logger, tempDir, type, null)).isNotNull();
+        }
+
+        @ParameterizedTest(name = "accepts databaseType=[{0}] case-insensitively")
+        @ValueSource(strings = {"mysql", "MySQL", "MYSQL"})
+        void mysqlCaseInsensitive(String type) {
+            assertThat(new DatabaseManager(logger, tempDir, type, defaultMysqlConfig())).isNotNull();
+        }
     }
 
-    @Test
-    void testConstructor_emptyDatabaseType() {
-        // Empty database type should throw exception
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new DatabaseManager(logger, tempDir, "", null)
-        );
+    // -------------------------------------------------------------------------
+    // MySQL config — varying shapes are all accepted at construction time
+    // -------------------------------------------------------------------------
 
-        assertTrue(exception.getMessage().contains("databaseType cannot be null or empty"));
+    @Nested
+    @DisplayName("MySQL config — accepted shapes")
+    class MysqlConfigShapes {
+
+        @Test
+        @DisplayName("default values (no pool, no properties)")
+        void defaults() {
+            assertThat(new DatabaseManager(logger, tempDir, "mysql", defaultMysqlConfig())).isNotNull();
+        }
+
+        @Test
+        @DisplayName("custom host")
+        void customHost() {
+            assertThat(new DatabaseManager(logger, tempDir, "mysql",
+                mysqlConfig("mysql.example.com", 3306, "stormtrooperx", "root", ""))).isNotNull();
+        }
+
+        @Test
+        @DisplayName("custom port")
+        void customPort() {
+            assertThat(new DatabaseManager(logger, tempDir, "mysql",
+                mysqlConfig("localhost", 3307, "stormtrooperx", "root", ""))).isNotNull();
+        }
+
+        @Test
+        @DisplayName("complex hostname with dots/hyphens/underscores")
+        void complexHostname() {
+            assertThat(new DatabaseManager(logger, tempDir, "mysql",
+                mysqlConfig("db-server_1.mysql.example.com", 3306, "stormtrooperx", "root", ""))).isNotNull();
+        }
+
+        @ParameterizedTest(name = "edge-case port {0}")
+        @ValueSource(ints = {1, 65535})
+        void edgeCasePorts(int port) {
+            assertThat(new DatabaseManager(logger, tempDir, "mysql",
+                mysqlConfig("localhost", port, "stormtrooperx", "root", ""))).isNotNull();
+        }
+
+        @Test
+        @DisplayName("with HikariCP pool configuration")
+        void withPoolConfig() {
+            final ConfigurationSection cfg = defaultMysqlConfig();
+            final ConfigurationSection pool = mock(ConfigurationSection.class);
+            when(cfg.getConfigurationSection("pool")).thenReturn(pool);
+            when(pool.getInt("maximum-pool-size", 10)).thenReturn(20);
+            when(pool.getInt("minimum-idle", 2)).thenReturn(5);
+            when(pool.getLong("connection-timeout", 30000)).thenReturn(60000L);
+            when(pool.getLong("idle-timeout", 600000)).thenReturn(300000L);
+            when(pool.getLong("max-lifetime", 1800000)).thenReturn(900000L);
+
+            assertThat(new DatabaseManager(logger, tempDir, "mysql", cfg)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("with custom JDBC properties (SSL etc.)")
+        void withCustomProperties() {
+            final ConfigurationSection cfg = defaultMysqlConfig();
+            final ConfigurationSection props = mock(ConfigurationSection.class);
+            when(cfg.getConfigurationSection("properties")).thenReturn(props);
+            when(props.getKeys(false)).thenReturn(new HashSet<>(Arrays.asList("useSSL", "serverTimezone")));
+            when(props.getString("useSSL")).thenReturn("true");
+            when(props.getString("serverTimezone")).thenReturn("UTC");
+
+            assertThat(new DatabaseManager(logger, tempDir, "mysql", cfg)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("with empty properties section")
+        void emptyPropertiesSection() {
+            final ConfigurationSection cfg = defaultMysqlConfig();
+            final ConfigurationSection props = mock(ConfigurationSection.class);
+            when(cfg.getConfigurationSection("properties")).thenReturn(props);
+            when(props.getKeys(false)).thenReturn(new HashSet<>());
+
+            assertThat(new DatabaseManager(logger, tempDir, "mysql", cfg)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("with all custom settings (host, port, pool, SSL properties)")
+        void allCustom() {
+            final ConfigurationSection cfg = mysqlConfig("db.example.com", 3307, "mydb", "dbuser", "secretpass");
+            final ConfigurationSection pool = mock(ConfigurationSection.class);
+            final ConfigurationSection props = mock(ConfigurationSection.class);
+            when(cfg.getConfigurationSection("pool")).thenReturn(pool);
+            when(cfg.getConfigurationSection("properties")).thenReturn(props);
+
+            when(pool.getInt("maximum-pool-size", 10)).thenReturn(15);
+            when(pool.getInt("minimum-idle", 2)).thenReturn(3);
+            when(pool.getLong("connection-timeout", 30000)).thenReturn(45000L);
+            when(pool.getLong("idle-timeout", 600000)).thenReturn(700000L);
+            when(pool.getLong("max-lifetime", 1800000)).thenReturn(2000000L);
+
+            when(props.getKeys(false)).thenReturn(new HashSet<>(Arrays.asList(
+                "useSSL", "requireSSL", "verifyServerCertificate", "serverTimezone", "characterEncoding"
+            )));
+            when(props.getString("useSSL")).thenReturn("true");
+            when(props.getString("requireSSL")).thenReturn("true");
+            when(props.getString("verifyServerCertificate")).thenReturn("false");
+            when(props.getString("serverTimezone")).thenReturn("America/New_York");
+            when(props.getString("characterEncoding")).thenReturn("utf8mb4");
+
+            assertThat(new DatabaseManager(logger, tempDir, "mysql", cfg)).isNotNull();
+        }
     }
 
-    @Test
-    void testConstructor_nullLogger() {
-        // Null logger should throw exception
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new DatabaseManager(null, tempDir, "h2", null)
-        );
+    // -------------------------------------------------------------------------
+    // JDBC URL injection guards — these run at initialize(), not construction
+    // -------------------------------------------------------------------------
 
-        assertTrue(exception.getMessage().contains("logger cannot be null"));
+    @Nested
+    @DisplayName("MySQL initialize() — URL/SQL injection guards")
+    class InjectionGuards {
+
+        @Test
+        @DisplayName("rejects host with appended JDBC parameters")
+        void invalidHost() {
+            final DatabaseManager mgr = new DatabaseManager(logger, tempDir, "mysql",
+                mysqlConfig("localhost?allowLoadLocalInfile=true&", 3306, "stormtrooperx", "root", ""));
+            assertThatThrownBy(mgr::initialize)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid MySQL host format");
+        }
+
+        @Test
+        @DisplayName("rejects database name with SQL metacharacters")
+        void invalidDatabaseName() {
+            final DatabaseManager mgr = new DatabaseManager(logger, tempDir, "mysql",
+                mysqlConfig("localhost", 3306, "test;DROP TABLE users;--", "root", ""));
+            assertThatThrownBy(mgr::initialize)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid MySQL database name");
+        }
+
+        @Test
+        @DisplayName("rejects username with SQL injection attempt")
+        void invalidUsername() {
+            final DatabaseManager mgr = new DatabaseManager(logger, tempDir, "mysql",
+                mysqlConfig("localhost", 3306, "stormtrooperx", "root'--", ""));
+            assertThatThrownBy(mgr::initialize)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid MySQL username");
+        }
+
+        @ParameterizedTest(name = "rejects out-of-range port {0}")
+        @ValueSource(ints = {0, 99999})
+        void invalidPort(int port) {
+            final DatabaseManager mgr = new DatabaseManager(logger, tempDir, "mysql",
+                mysqlConfig("localhost", port, "stormtrooperx", "root", ""));
+            assertThatThrownBy(mgr::initialize)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid MySQL port");
+        }
     }
 
-    @Test
-    void testConstructor_nullDataFolder() {
-        // Null data folder should throw exception
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new DatabaseManager(logger, null, "h2", null)
-        );
+    // -------------------------------------------------------------------------
+    // Pool-size validator clamping
+    // -------------------------------------------------------------------------
 
-        assertTrue(exception.getMessage().contains("dataFolder cannot be null"));
+    @Nested
+    @DisplayName("validatePoolSize(value, name, min, max, default)")
+    class ValidatePoolSize {
+
+        private final DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
+
+        @ParameterizedTest(name = "value={0} (in range 1..100) is kept")
+        @ValueSource(ints = {1, 10, 100})
+        void inRangeValuesArePreserved(int value) {
+            assertThat(manager.validatePoolSize(value, "test", 1, 100, 5)).isEqualTo(value);
+        }
+
+        @ParameterizedTest(name = "value={0} (out of range 1..100) falls back to default 10")
+        @ValueSource(ints = {-5, 0, 101, 500})
+        void outOfRangeValuesFallBackToDefault(int value) {
+            assertThat(manager.validatePoolSize(value, "maximum-pool-size", 1, 100, 10)).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("minimum-idle cannot exceed maximum-pool-size — clamps to default")
+        void minIdleAboveMaxFallsBackToDefault() {
+            assertThat(manager.validatePoolSize(100, "minimum-idle", 0, 5, 2)).isEqualTo(2);
+        }
     }
 
-    @Test
-    void testMySQLConfig_defaultValues() {
-        // Create mock config with only basic values (no pool or properties sections)
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+    // -------------------------------------------------------------------------
+    // Timeout validator clamping
+    // -------------------------------------------------------------------------
 
-        // Should not throw exception
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager);
-    }
+    @Nested
+    @DisplayName("validateTimeout(value, name, min, default)")
+    class ValidateTimeout {
 
-    @Test
-    void testMySQLConfig_customHost() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("mysql.example.com");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+        private final DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
 
-        // Constructor should succeed with custom host config
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager);
-    }
+        @ParameterizedTest(name = "value={0} >= min (250) is kept")
+        @ValueSource(longs = {250L, 30000L, 60000L})
+        void atOrAboveMinimumIsPreserved(long value) {
+            assertThat(manager.validateTimeout(value, "test", 250, 30000)).isEqualTo(value);
+        }
 
-    @Test
-    void testMySQLConfig_customPort() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3307);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
+        @ParameterizedTest(name = "{0} is below {1} -> default {2}")
+        @CsvSource({
+            "100,  250,    30000",
+            "5000, 10000, 600000",
+        })
+        void belowMinimumReturnsDefault(long value, long min, long defaultValue) {
+            assertThat(manager.validateTimeout(value, "test-timeout", min, defaultValue)).isEqualTo(defaultValue);
+        }
 
-        // Constructor should succeed with custom port config
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager);
-    }
-
-    @Test
-    void testMySQLConfig_withPoolConfiguration() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        ConfigurationSection poolConfig = mock(ConfigurationSection.class);
-
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(poolConfig);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
-
-        // Pool config values
-        when(poolConfig.getInt("maximum-pool-size", 10)).thenReturn(20);
-        when(poolConfig.getInt("minimum-idle", 2)).thenReturn(5);
-        when(poolConfig.getLong("connection-timeout", 30000)).thenReturn(60000L);
-        when(poolConfig.getLong("idle-timeout", 600000)).thenReturn(300000L);
-        when(poolConfig.getLong("max-lifetime", 1800000)).thenReturn(900000L);
-
-        // Constructor should succeed with pool configuration
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager);
-    }
-
-    @Test
-    void testMySQLConfig_withCustomProperties() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        ConfigurationSection properties = mock(ConfigurationSection.class);
-
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(properties);
-
-        // Custom JDBC properties
-        when(properties.getKeys(false)).thenReturn(new HashSet<>(Arrays.asList("useSSL", "serverTimezone")));
-        when(properties.getString("useSSL")).thenReturn("true");
-        when(properties.getString("serverTimezone")).thenReturn("UTC");
-
-        // Constructor should succeed with custom properties
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager);
-    }
-
-    @Test
-    void testMySQLConfig_emptyPropertiesSection() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        ConfigurationSection properties = mock(ConfigurationSection.class);
-
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(properties);
-
-        // Empty properties (no keys)
-        when(properties.getKeys(false)).thenReturn(new HashSet<>());
-
-        // Constructor should succeed with empty properties section
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager);
-    }
-
-    @Test
-    void testMySQLConfig_caseInsensitiveDatabaseType() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
-
-        // Test with different case variations
-        DatabaseManager manager1 = new DatabaseManager(logger, tempDir, "MySQL", mysqlConfig);
-        DatabaseManager manager2 = new DatabaseManager(logger, tempDir, "MYSQL", mysqlConfig);
-        DatabaseManager manager3 = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-
-        assertNotNull(manager1);
-        assertNotNull(manager2);
-        assertNotNull(manager3);
-    }
-
-    @Test
-    void testH2Config_caseInsensitiveDatabaseType() {
-        // Test with different case variations for H2
-        DatabaseManager manager1 = new DatabaseManager(logger, tempDir, "H2", null);
-        DatabaseManager manager2 = new DatabaseManager(logger, tempDir, "h2", null);
-
-        assertNotNull(manager1);
-        assertNotNull(manager2);
-    }
-
-    @Test
-    void testMySQLConfig_withAllCustomSettings() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        ConfigurationSection poolConfig = mock(ConfigurationSection.class);
-        ConfigurationSection properties = mock(ConfigurationSection.class);
-
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("db.example.com");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3307);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("mydb");
-        when(mysqlConfig.getString("username", "root")).thenReturn("dbuser");
-        when(mysqlConfig.getString("password", "")).thenReturn("secretpass");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(poolConfig);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(properties);
-
-        // Pool config
-        when(poolConfig.getInt("maximum-pool-size", 10)).thenReturn(15);
-        when(poolConfig.getInt("minimum-idle", 2)).thenReturn(3);
-        when(poolConfig.getLong("connection-timeout", 30000)).thenReturn(45000L);
-        when(poolConfig.getLong("idle-timeout", 600000)).thenReturn(700000L);
-        when(poolConfig.getLong("max-lifetime", 1800000)).thenReturn(2000000L);
-
-        // Custom properties
-        when(properties.getKeys(false)).thenReturn(new HashSet<>(Arrays.asList(
-            "useSSL", "requireSSL", "verifyServerCertificate", "serverTimezone", "characterEncoding"
-        )));
-        when(properties.getString("useSSL")).thenReturn("true");
-        when(properties.getString("requireSSL")).thenReturn("true");
-        when(properties.getString("verifyServerCertificate")).thenReturn("false");
-        when(properties.getString("serverTimezone")).thenReturn("America/New_York");
-        when(properties.getString("characterEncoding")).thenReturn("utf8mb4");
-
-        // Constructor should succeed with all custom settings
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager);
-    }
-
-    // ===========================================
-    // MySQL Parameter Validation Tests (Security)
-    // ===========================================
-
-    @Test
-    void testMySQLValidation_invalidHostWithInjection() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        // Attempt JDBC URL injection via host parameter
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost?allowLoadLocalInfile=true&");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
-
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-
-        // Should throw IllegalArgumentException when initialize() is called due to invalid host
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> manager.initialize()
-        );
-        assertTrue(exception.getMessage().contains("Invalid MySQL host format"));
-    }
-
-    @Test
-    void testMySQLValidation_invalidDatabaseWithInjection() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        // Attempt JDBC URL injection via database parameter
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("test;DROP TABLE users;--");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
-
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> manager.initialize()
-        );
-        assertTrue(exception.getMessage().contains("Invalid MySQL database name"));
-    }
-
-    @Test
-    void testMySQLValidation_invalidPort() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(99999); // Invalid port
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
-
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> manager.initialize()
-        );
-        assertTrue(exception.getMessage().contains("Invalid MySQL port"));
-    }
-
-    @Test
-    void testMySQLValidation_invalidPortZero() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(0); // Invalid port
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
-
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> manager.initialize()
-        );
-        assertTrue(exception.getMessage().contains("Invalid MySQL port"));
-    }
-
-    @Test
-    void testMySQLValidation_invalidUsername() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        // Attempt injection via username
-        when(mysqlConfig.getString("username", "root")).thenReturn("root'--");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
-
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> manager.initialize()
-        );
-        assertTrue(exception.getMessage().contains("Invalid MySQL username"));
-    }
-
-    @Test
-    void testMySQLValidation_validComplexHostname() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        // Valid complex hostname with dots, hyphens, underscores
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("db-server_1.mysql.example.com");
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(3306);
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
-
-        // Constructor should succeed - validation happens at initialize()
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager);
-        // Note: initialize() would still fail without actual MySQL, but validation passes
-    }
-
-    @Test
-    void testMySQLValidation_validEdgeCasePorts() {
-        ConfigurationSection mysqlConfig = mock(ConfigurationSection.class);
-        when(mysqlConfig.getString("host", "localhost")).thenReturn("localhost");
-        when(mysqlConfig.getString("database", "stormtrooperx")).thenReturn("stormtrooperx");
-        when(mysqlConfig.getString("username", "root")).thenReturn("root");
-        when(mysqlConfig.getString("password", "")).thenReturn("");
-        when(mysqlConfig.getConfigurationSection("pool")).thenReturn(null);
-        when(mysqlConfig.getConfigurationSection("properties")).thenReturn(null);
-
-        // Test port 1 (minimum valid)
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(1);
-        DatabaseManager manager1 = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager1);
-
-        // Test port 65535 (maximum valid)
-        when(mysqlConfig.getInt("port", 3306)).thenReturn(65535);
-        DatabaseManager manager2 = new DatabaseManager(logger, tempDir, "mysql", mysqlConfig);
-        assertNotNull(manager2);
-    }
-
-    // ===========================================
-    // Pool Configuration Validation Tests
-    // ===========================================
-
-    @Test
-    void testValidatePoolSize_validValue() {
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
-
-        // Valid value within range
-        assertEquals(10, manager.validatePoolSize(10, "test", 1, 100, 5));
-        assertEquals(1, manager.validatePoolSize(1, "test", 1, 100, 5));
-        assertEquals(100, manager.validatePoolSize(100, "test", 1, 100, 5));
-    }
-
-    @Test
-    void testValidatePoolSize_belowMinimum() {
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
-
-        // Below minimum returns default
-        assertEquals(10, manager.validatePoolSize(-5, "maximum-pool-size", 1, 100, 10));
-        assertEquals(10, manager.validatePoolSize(0, "maximum-pool-size", 1, 100, 10));
-    }
-
-    @Test
-    void testValidatePoolSize_aboveMaximum() {
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
-
-        // Above maximum returns default
-        assertEquals(10, manager.validatePoolSize(500, "maximum-pool-size", 1, 100, 10));
-        assertEquals(10, manager.validatePoolSize(101, "maximum-pool-size", 1, 100, 10));
-    }
-
-    @Test
-    void testValidateTimeout_validValue() {
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
-
-        // Valid value at or above minimum
-        assertEquals(30000L, manager.validateTimeout(30000L, "test", 250, 30000));
-        assertEquals(60000L, manager.validateTimeout(60000L, "test", 250, 30000));
-        assertEquals(250L, manager.validateTimeout(250L, "test", 250, 30000));
-    }
-
-    @Test
-    void testValidateTimeout_belowMinimum() {
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
-
-        // Below minimum returns default
-        assertEquals(30000L, manager.validateTimeout(100L, "connection-timeout", 250, 30000));
-        assertEquals(600000L, manager.validateTimeout(5000L, "idle-timeout", 10000, 600000));
-    }
-
-    @Test
-    void testValidateTimeout_zeroIsValid() {
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
-
-        // Zero is valid (disables timeout)
-        assertEquals(0L, manager.validateTimeout(0L, "idle-timeout", 10000, 600000));
-        assertEquals(0L, manager.validateTimeout(0L, "max-lifetime", 30000, 1800000));
-    }
-
-    @Test
-    void testValidatePoolSize_minIdleCannotExceedMaxPoolSize() {
-        DatabaseManager manager = new DatabaseManager(logger, tempDir, "h2", null);
-
-        // minimum-idle > maximum-pool-size returns default
-        int maxPoolSize = 5;
-        assertEquals(2, manager.validatePoolSize(100, "minimum-idle", 0, maxPoolSize, 2));
+        @ParameterizedTest(name = "zero is a valid sentinel for {0}")
+        @ValueSource(strings = {"idle-timeout", "max-lifetime"})
+        void zeroDisablesTimeout(String name) {
+            assertThat(manager.validateTimeout(0L, name, 10000, 600000)).isZero();
+        }
     }
 }

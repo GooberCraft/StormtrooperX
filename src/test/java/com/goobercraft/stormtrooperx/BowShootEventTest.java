@@ -1,5 +1,17 @@
 package com.goobercraft.stormtrooperx;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.EnumMap;
+import java.util.UUID;
+
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
@@ -8,223 +20,211 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.util.Vector;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.UUID;
+import com.goobercraft.stormtrooperx.support.TestSupport;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
+/**
+ * Event-handler integration tests for {@code StormtrooperX.onBowShoot}.
+ *
+ * <p>The pure speed-preserving math lives in {@link ProjectileNerfTest}.
+ * The tests here verify the event-routing surface around it: early-return
+ * paths, opt-out short-circuit, and that the wiring from event to
+ * {@link ProjectileNerf} actually preserves speed end-to-end.</p>
+ */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("StormtrooperX.onBowShoot — event-handler routing")
 class BowShootEventTest {
 
     private StormtrooperX plugin;
-    private Constructor<?> entityConfigConstructor;
+    private EnumMap<EntityType, Object> entityConfigs;
 
     @Mock
     private OptOutManager optOutManager;
 
-    @SuppressWarnings("unchecked")
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         plugin = mock(StormtrooperX.class, CALLS_REAL_METHODS);
+        entityConfigs = new EnumMap<>(EntityType.class);
+        TestSupport.inject(plugin, "entityConfigs", entityConfigs);
+        TestSupport.inject(plugin, "optOutManager", optOutManager);
+        TestSupport.inject(plugin, "debug", false);
+    }
 
-        // Locate EntityConfig inner class and its constructor
-        Class<?> entityConfigClass = null;
-        for (Class<?> inner : StormtrooperX.class.getDeclaredClasses()) {
-            if ("EntityConfig".equals(inner.getSimpleName())) {
-                entityConfigClass = inner;
-                break;
-            }
+    private void configureEntity(EntityType type, boolean enabled, double accuracy) {
+        entityConfigs.put(type, new StormtrooperX.EntityConfig(enabled, accuracy));
+    }
+
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("early-return paths — getProjectile() must not be called")
+    class EarlyReturn {
+
+        @Test
+        @DisplayName("entity has no config entry")
+        void entityNotConfigured() {
+            final EntityShootBowEvent event = mock(EntityShootBowEvent.class);
+            final LivingEntity entity = mock(LivingEntity.class);
+            when(event.getEntity()).thenReturn(entity);
+            when(entity.getType()).thenReturn(EntityType.SKELETON);
+
+            plugin.onBowShoot(event);
+
+            verify(event, never()).getProjectile();
         }
-        entityConfigConstructor = entityConfigClass.getDeclaredConstructor(boolean.class, double.class);
-        entityConfigConstructor.setAccessible(true);
 
-        // Inject empty entityConfigs map — field initializer is skipped by Mockito
-        Field entityConfigsField = StormtrooperX.class.getDeclaredField("entityConfigs");
-        entityConfigsField.setAccessible(true);
-        entityConfigsField.set(plugin, new EnumMap<>(EntityType.class));
+        @Test
+        @DisplayName("entity is configured but disabled")
+        void entityDisabled() {
+            configureEntity(EntityType.SKELETON, false, 0.7);
+            final EntityShootBowEvent event = mock(EntityShootBowEvent.class);
+            final LivingEntity entity = mock(LivingEntity.class);
+            when(event.getEntity()).thenReturn(entity);
+            when(entity.getType()).thenReturn(EntityType.SKELETON);
 
-        // Inject optOutManager
-        Field optOutManagerField = StormtrooperX.class.getDeclaredField("optOutManager");
-        optOutManagerField.setAccessible(true);
-        optOutManagerField.set(plugin, optOutManager);
+            plugin.onBowShoot(event);
 
-        // Keep debug=false — logger is null in the mock; debug paths would NPE
-        Field debugField = StormtrooperX.class.getDeclaredField("debug");
-        debugField.setAccessible(true);
-        debugField.set(plugin, false);
-    }
+            verify(event, never()).getProjectile();
+        }
 
-    @SuppressWarnings("unchecked")
-    private void addEntityConfig(EntityType type, boolean enabled, double accuracy) throws Exception {
-        Field field = StormtrooperX.class.getDeclaredField("entityConfigs");
-        field.setAccessible(true);
-        ((Map<EntityType, Object>) field.get(plugin)).put(type, entityConfigConstructor.newInstance(enabled, accuracy));
-    }
+        @Test
+        @DisplayName("target player has opted out")
+        void playerOptedOut() {
+            configureEntity(EntityType.SKELETON, true, 0.7);
+            final UUID playerUuid = UUID.randomUUID();
+            final EntityShootBowEvent event = mock(EntityShootBowEvent.class);
+            final Mob mob = mock(Mob.class);
+            final Player player = mock(Player.class);
+            when(event.getEntity()).thenReturn(mob);
+            when(mob.getType()).thenReturn(EntityType.SKELETON);
+            when(mob.getTarget()).thenReturn(player);
+            when(player.getUniqueId()).thenReturn(playerUuid);
+            when(optOutManager.isOptedOut(playerUuid)).thenReturn(true);
 
-    // -------------------------------------------------------------------------
-    // Early-return paths — getProjectile() must never be called
-    // -------------------------------------------------------------------------
+            plugin.onBowShoot(event);
 
-    @Test
-    void testBowShoot_entityNotConfigured_doesNotAccessProjectile() throws Exception {
-        EntityShootBowEvent event = mock(EntityShootBowEvent.class);
-        LivingEntity entity = mock(LivingEntity.class);
-        when(event.getEntity()).thenReturn(entity);
-        when(entity.getType()).thenReturn(EntityType.SKELETON);
-        // entityConfigs is empty — no entry for SKELETON
-
-        plugin.onBowShoot(event);
-
-        verify(event, never()).getProjectile();
-    }
-
-    @Test
-    void testBowShoot_entityDisabled_doesNotAccessProjectile() throws Exception {
-        addEntityConfig(EntityType.SKELETON, false, 0.7);
-
-        EntityShootBowEvent event = mock(EntityShootBowEvent.class);
-        LivingEntity entity = mock(LivingEntity.class);
-        when(event.getEntity()).thenReturn(entity);
-        when(entity.getType()).thenReturn(EntityType.SKELETON);
-
-        plugin.onBowShoot(event);
-
-        verify(event, never()).getProjectile();
-    }
-
-    @Test
-    void testBowShoot_playerOptedOut_doesNotAccessProjectile() throws Exception {
-        addEntityConfig(EntityType.SKELETON, true, 0.7);
-        UUID playerUuid = UUID.randomUUID();
-
-        EntityShootBowEvent event = mock(EntityShootBowEvent.class);
-        Mob mob = mock(Mob.class);
-        Player player = mock(Player.class);
-        when(event.getEntity()).thenReturn(mob);
-        when(mob.getType()).thenReturn(EntityType.SKELETON);
-        when(mob.getTarget()).thenReturn(player);
-        when(player.getUniqueId()).thenReturn(playerUuid);
-        when(optOutManager.isOptedOut(playerUuid)).thenReturn(true);
-
-        plugin.onBowShoot(event);
-
-        verify(event, never()).getProjectile();
+            verify(event, never()).getProjectile();
+        }
     }
 
     // -------------------------------------------------------------------------
-    // Zero-velocity guard — getProjectile() is called but setVelocity() must not be
-    // -------------------------------------------------------------------------
 
-    @Test
-    void testBowShoot_zeroVelocity_doesNotCallSetVelocity() throws Exception {
-        addEntityConfig(EntityType.SKELETON, true, 0.7);
+    @Nested
+    @DisplayName("zero-velocity guard — getProjectile() runs but setVelocity() must not")
+    class ZeroVelocityGuard {
 
-        EntityShootBowEvent event = mock(EntityShootBowEvent.class);
-        LivingEntity entity = mock(LivingEntity.class);
-        Entity projectile = mock(Entity.class);
-        when(event.getEntity()).thenReturn(entity);
-        when(entity.getType()).thenReturn(EntityType.SKELETON);
-        when(event.getProjectile()).thenReturn(projectile);
-        when(projectile.getVelocity()).thenReturn(new Vector(0, 0, 0));
+        @Test
+        @DisplayName("zero-length projectile velocity is left alone")
+        void zeroLength() {
+            configureEntity(EntityType.SKELETON, true, 0.7);
+            final EntityShootBowEvent event = mock(EntityShootBowEvent.class);
+            final LivingEntity entity = mock(LivingEntity.class);
+            final Entity projectile = mock(Entity.class);
+            when(event.getEntity()).thenReturn(entity);
+            when(entity.getType()).thenReturn(EntityType.SKELETON);
+            when(event.getProjectile()).thenReturn(projectile);
+            when(projectile.getVelocity()).thenReturn(new Vector(0, 0, 0));
 
-        plugin.onBowShoot(event);
+            plugin.onBowShoot(event);
 
-        verify(projectile, never()).setVelocity(any());
+            verify(projectile, never()).setVelocity(any());
+        }
     }
 
     // -------------------------------------------------------------------------
-    // Velocity-modification paths — setVelocity() must be called
-    // -------------------------------------------------------------------------
 
-    @Test
-    void testBowShoot_configuredEntity_speedIsPreserved() throws Exception {
-        addEntityConfig(EntityType.SKELETON, true, 0.7);
-        Vector originalVelocity = new Vector(1.0, 0.5, 0.5);
-        double originalSpeed = originalVelocity.length();
+    @Nested
+    @DisplayName("velocity-modification paths — setVelocity() must be called")
+    class VelocityModification {
 
-        EntityShootBowEvent event = mock(EntityShootBowEvent.class);
-        LivingEntity entity = mock(LivingEntity.class);
-        Entity projectile = mock(Entity.class);
-        when(event.getEntity()).thenReturn(entity);
-        when(entity.getType()).thenReturn(EntityType.SKELETON);
-        when(event.getProjectile()).thenReturn(projectile);
-        when(projectile.getVelocity()).thenReturn(originalVelocity);
+        @Test
+        @DisplayName("end-to-end: speed is preserved through the event handler -> ProjectileNerf wiring")
+        void speedPreservedEndToEnd() {
+            configureEntity(EntityType.SKELETON, true, 0.7);
+            final Vector originalVelocity = new Vector(1.0, 0.5, 0.5);
+            final double originalSpeed = originalVelocity.length();
 
-        plugin.onBowShoot(event);
+            final EntityShootBowEvent event = mock(EntityShootBowEvent.class);
+            final LivingEntity entity = mock(LivingEntity.class);
+            final Entity projectile = mock(Entity.class);
+            when(event.getEntity()).thenReturn(entity);
+            when(entity.getType()).thenReturn(EntityType.SKELETON);
+            when(event.getProjectile()).thenReturn(projectile);
+            when(projectile.getVelocity()).thenReturn(originalVelocity);
 
-        ArgumentCaptor<Vector> captor = ArgumentCaptor.forClass(Vector.class);
-        verify(projectile).setVelocity(captor.capture());
-        assertEquals(originalSpeed, captor.getValue().length(), 1e-10,
-                "Projectile speed must be preserved after direction deviation is applied");
-    }
+            plugin.onBowShoot(event);
 
-    @Test
-    void testBowShoot_playerNotOptedOut_modifiesVelocity() throws Exception {
-        addEntityConfig(EntityType.SKELETON, true, 0.7);
-        UUID playerUuid = UUID.randomUUID();
+            final ArgumentCaptor<Vector> captor = ArgumentCaptor.forClass(Vector.class);
+            verify(projectile).setVelocity(captor.capture());
+            assertThat(captor.getValue().length())
+                .as("event-handler must preserve projectile speed")
+                .isCloseTo(originalSpeed, within(1e-10));
+        }
 
-        EntityShootBowEvent event = mock(EntityShootBowEvent.class);
-        Mob mob = mock(Mob.class);
-        Player player = mock(Player.class);
-        Entity projectile = mock(Entity.class);
-        when(event.getEntity()).thenReturn(mob);
-        when(mob.getType()).thenReturn(EntityType.SKELETON);
-        when(mob.getTarget()).thenReturn(player);
-        when(player.getUniqueId()).thenReturn(playerUuid);
-        when(optOutManager.isOptedOut(playerUuid)).thenReturn(false);
-        when(event.getProjectile()).thenReturn(projectile);
-        when(projectile.getVelocity()).thenReturn(new Vector(1.0, 0.0, 0.0));
+        @Test
+        @DisplayName("player not opted out -> velocity is modified")
+        void playerNotOptedOut() {
+            configureEntity(EntityType.SKELETON, true, 0.7);
+            final UUID playerUuid = UUID.randomUUID();
+            final EntityShootBowEvent event = mock(EntityShootBowEvent.class);
+            final Mob mob = mock(Mob.class);
+            final Player player = mock(Player.class);
+            final Entity projectile = mock(Entity.class);
+            when(event.getEntity()).thenReturn(mob);
+            when(mob.getType()).thenReturn(EntityType.SKELETON);
+            when(mob.getTarget()).thenReturn(player);
+            when(player.getUniqueId()).thenReturn(playerUuid);
+            when(optOutManager.isOptedOut(playerUuid)).thenReturn(false);
+            when(event.getProjectile()).thenReturn(projectile);
+            when(projectile.getVelocity()).thenReturn(new Vector(1.0, 0.0, 0.0));
 
-        plugin.onBowShoot(event);
+            plugin.onBowShoot(event);
 
-        verify(projectile).setVelocity(any(Vector.class));
-    }
+            verify(projectile).setVelocity(any(Vector.class));
+        }
 
-    @Test
-    void testBowShoot_mobWithNullTarget_modifiesVelocity() throws Exception {
-        addEntityConfig(EntityType.SKELETON, true, 0.7);
+        @Test
+        @DisplayName("mob with null target -> velocity is still modified")
+        void mobNullTarget() {
+            configureEntity(EntityType.SKELETON, true, 0.7);
+            final EntityShootBowEvent event = mock(EntityShootBowEvent.class);
+            final Mob mob = mock(Mob.class);
+            final Entity projectile = mock(Entity.class);
+            when(event.getEntity()).thenReturn(mob);
+            when(mob.getType()).thenReturn(EntityType.SKELETON);
+            when(mob.getTarget()).thenReturn(null);
+            when(event.getProjectile()).thenReturn(projectile);
+            when(projectile.getVelocity()).thenReturn(new Vector(0.0, 1.0, 0.0));
 
-        EntityShootBowEvent event = mock(EntityShootBowEvent.class);
-        Mob mob = mock(Mob.class);
-        Entity projectile = mock(Entity.class);
-        when(event.getEntity()).thenReturn(mob);
-        when(mob.getType()).thenReturn(EntityType.SKELETON);
-        when(mob.getTarget()).thenReturn(null);
-        when(event.getProjectile()).thenReturn(projectile);
-        when(projectile.getVelocity()).thenReturn(new Vector(0.0, 1.0, 0.0));
+            plugin.onBowShoot(event);
 
-        plugin.onBowShoot(event);
+            verify(projectile).setVelocity(any(Vector.class));
+        }
 
-        verify(projectile).setVelocity(any(Vector.class));
-    }
+        @Test
+        @DisplayName("mob with non-player target -> velocity is still modified")
+        void mobNonPlayerTarget() {
+            configureEntity(EntityType.SKELETON, true, 0.7);
+            final EntityShootBowEvent event = mock(EntityShootBowEvent.class);
+            final Mob mob = mock(Mob.class);
+            final LivingEntity nonPlayerTarget = mock(LivingEntity.class);
+            final Entity projectile = mock(Entity.class);
+            when(event.getEntity()).thenReturn(mob);
+            when(mob.getType()).thenReturn(EntityType.SKELETON);
+            when(mob.getTarget()).thenReturn(nonPlayerTarget);
+            when(event.getProjectile()).thenReturn(projectile);
+            when(projectile.getVelocity()).thenReturn(new Vector(0.5, 0.5, 0.5));
 
-    @Test
-    void testBowShoot_mobWithNonPlayerTarget_modifiesVelocity() throws Exception {
-        addEntityConfig(EntityType.SKELETON, true, 0.7);
+            plugin.onBowShoot(event);
 
-        EntityShootBowEvent event = mock(EntityShootBowEvent.class);
-        Mob mob = mock(Mob.class);
-        LivingEntity nonPlayerTarget = mock(LivingEntity.class);
-        Entity projectile = mock(Entity.class);
-        when(event.getEntity()).thenReturn(mob);
-        when(mob.getType()).thenReturn(EntityType.SKELETON);
-        when(mob.getTarget()).thenReturn(nonPlayerTarget);
-        when(event.getProjectile()).thenReturn(projectile);
-        when(projectile.getVelocity()).thenReturn(new Vector(0.5, 0.5, 0.5));
-
-        plugin.onBowShoot(event);
-
-        verify(projectile).setVelocity(any(Vector.class));
+            verify(projectile).setVelocity(any(Vector.class));
+        }
     }
 }

@@ -1,42 +1,37 @@
 package com.goobercraft.stormtrooperx;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
+
+import java.util.logging.Logger;
+
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.lang.reflect.Method;
-import java.util.logging.Logger;
-
 import com.goobercraft.stormtrooperx.scheduler.PluginScheduler;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
+import com.goobercraft.stormtrooperx.support.InlinePluginScheduler;
+import com.goobercraft.stormtrooperx.support.TestSupport;
 
 /**
- * Unit tests for UpdateChecker.
- * These tests focus on the pure logic methods (version comparison, JSON parsing)
- * without requiring full Bukkit integration.
+ * Unit tests for {@link UpdateChecker}. Covers the pure-logic surface
+ * (version comparison, JSON parsing, release-tag validation) without
+ * hitting GitHub.
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("UpdateChecker — version comparison, JSON parsing, release-tag validation")
 class UpdateCheckerTest {
-
-    /** Runs scheduled tasks inline on the caller thread for deterministic testing. */
-    private static final class InlinePluginScheduler implements PluginScheduler {
-        @Override
-        public void runAsync(Runnable task) {
-            task.run();
-        }
-
-        @Override
-        public void runGlobal(Runnable task) {
-            task.run();
-        }
-    }
 
     @Mock
     private Plugin plugin;
@@ -46,530 +41,322 @@ class UpdateCheckerTest {
 
     @BeforeEach
     void setUp() {
-        // Create real instances where possible to avoid mocking final classes
-        Logger logger = Logger.getLogger("TestLogger");
-        PluginDescriptionFile description = new PluginDescriptionFile("TestPlugin", "1.0.0", "com.test.Main");
-
-        // Use lenient stubbing since not all tests will call these methods
+        // plugin.getLogger() / getDescription() are only touched inside checkForUpdates(),
+        // not the constructor, so most tests never trigger these stubs — keep them lenient.
+        final Logger logger = Logger.getLogger("UpdateCheckerTest");
+        final PluginDescriptionFile description = new PluginDescriptionFile("TestPlugin", "1.0.0", "com.test.Main");
         lenient().when(plugin.getLogger()).thenReturn(logger);
         lenient().when(plugin.getDescription()).thenReturn(description);
         scheduler = new InlinePluginScheduler();
         updateChecker = new UpdateChecker(plugin, scheduler, "owner/repo");
     }
 
-    @Test
-    void testConstructor() {
-        assertNotNull(updateChecker);
+    // ---------------------------------------------------------------------
+    // Constructor + repo-string validation
+    // ---------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("constructor")
+    class Constructor {
+
+        @Test
+        @DisplayName("accepts valid owner/repo string")
+        void acceptsValidRepo() {
+            assertThat(new UpdateChecker(plugin, scheduler, "owner/repo")).isNotNull();
+        }
+
+        @Test
+        @DisplayName("accepts GitHub-legal owner/repo names (dots, dashes, underscores)")
+        void acceptsValidRepoChars() {
+            assertThat(new UpdateChecker(plugin, scheduler, "MyOrg-1/my.repo_v2")).isNotNull();
+        }
+
+        @Test
+        @DisplayName("rejects null plugin")
+        void rejectsNullPlugin() {
+            assertThatThrownBy(() -> new UpdateChecker(null, scheduler, "owner/repo"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("plugin cannot be null");
+        }
+
+        @Test
+        @DisplayName("rejects null scheduler")
+        void rejectsNullScheduler() {
+            assertThatThrownBy(() -> new UpdateChecker(plugin, null, "owner/repo"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("scheduler cannot be null");
+        }
+
+        @ParameterizedTest(name = "rejects githubRepo = [{0}]")
+        @NullAndEmptySource
+        void rejectsNullOrEmptyRepo(String repo) {
+            assertThatThrownBy(() -> new UpdateChecker(plugin, scheduler, repo))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("githubRepo cannot be null or empty");
+        }
+
+        @ParameterizedTest(name = "rejects malformed githubRepo = [{0}]")
+        @ValueSource(strings = {
+            "invalidrepo",
+            "owner/extra/repo",
+            "../sensitive/path",
+            "owner/repo;DROP TABLE",
+            "owner/repo\r\nHost: evil.com",
+        })
+        void rejectsMalformedRepo(String repo) {
+            assertThatThrownBy(() -> new UpdateChecker(plugin, scheduler, repo))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("githubRepo must be in format 'owner/repo'");
+        }
     }
 
-    @Test
-    void testConstructor_nullPlugin() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(null, scheduler, "owner/repo");
-        });
-        assertEquals("plugin cannot be null", exception.getMessage());
+    // ---------------------------------------------------------------------
+    // compareVersions
+    // ---------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("compareVersions(current, latest)")
+    class CompareVersions {
+
+        @ParameterizedTest(name = "compareVersions(\"{0}\", \"{1}\") has sign {2}")
+        @CsvSource({
+            // Basic relations
+            "1.0.0, 1.1.0, -1",
+            "1.0.0, 1.0.0,  0",
+            "2.0.0, 1.0.0,  1",
+            "1.0.0, 2.0.0, -1",
+            "1.1.0, 1.2.0, -1",
+            "1.0.1, 1.0.2, -1",
+            // Mixed lengths (missing parts treated as 0)
+            "1.0,     1.0.0, 0",
+            "1.0.1,   1.0,   1",
+            "1,       2,    -1",
+            // Multi-digit ordering — string-naive comparison would mis-order these
+            "1.2.3,   1.2.10, -1",
+            // Non-numeric suffix is stripped
+            "1.0-SNAPSHOT, 1.0, 0",
+            // Long version strings
+            "1.2.3.4.5.6.7.8, 1.2.3.4.5.6.7.9, -1",
+            // Four-part versions
+            "1.0.0.0, 1.0.0.1, -1",
+        })
+        void compareVersionsRespectsSign(String current, String latest, int expectedSign) {
+            final int result = TestSupport.invokePrivate(updateChecker, "compareVersions", current, latest);
+            assertThat(Integer.signum(result)).isEqualTo(expectedSign);
+        }
+
+        @ParameterizedTest(name = "compareVersions(\"{0}\", \"{1}\") sign={2}")
+        @CsvSource({
+            "'',    1.0.0, -1",
+            "'',    '',     0",
+        })
+        void compareVersionsHandlesEmptyStrings(String current, String latest, int expectedSign) {
+            final int result = TestSupport.invokePrivate(updateChecker, "compareVersions", current, latest);
+            assertThat(Integer.signum(result)).isEqualTo(expectedSign);
+        }
     }
 
-    @Test
-    void testConstructor_nullScheduler() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, null, "owner/repo");
-        });
-        assertEquals("scheduler cannot be null", exception.getMessage());
+    // ---------------------------------------------------------------------
+    // parseVersionPart
+    // ---------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("parseVersionPart(part)")
+    class ParseVersionPart {
+
+        @ParameterizedTest(name = "parseVersionPart(\"{0}\") = {1}")
+        @CsvSource({
+            "'123',        123",
+            "'1-SNAPSHOT', 1",
+            "'2alpha',     2",
+            "'',           0",
+            "'beta',       0",
+        })
+        void parsesAllExpectedShapes(String input, int expected) {
+            final int result = TestSupport.invokePrivate(updateChecker, "parseVersionPart", input);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("returns 0 for numbers that overflow Integer")
+        void overflowFallsBackToZero() {
+            // 21 nines comfortably exceeds Integer.MAX_VALUE (~2.1e9)
+            final int result = TestSupport.invokePrivate(updateChecker, "parseVersionPart", "999999999999999999999");
+            assertThat(result).isZero();
+        }
+
+        @Test
+        @DisplayName("returns 0 for pathologically long numeric strings without hanging")
+        void veryLargeInputDoesNotHang() {
+            final int result = TestSupport.invokePrivate(updateChecker, "parseVersionPart", "9".repeat(10_000));
+            assertThat(result).isZero();
+        }
     }
 
-    @Test
-    void testConstructor_nullGithubRepo() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, scheduler, null);
-        });
-        assertEquals("githubRepo cannot be null or empty", exception.getMessage());
+    // ---------------------------------------------------------------------
+    // extractJsonValue
+    // ---------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("extractJsonValue(json, key)")
+    class ExtractJsonValue {
+
+        @ParameterizedTest(name = "{2}")
+        @CsvSource(delimiter = '|', value = {
+            // json | key | description (used as name)
+            "{\"tag_name\":\"v1.2.0\",\"name\":\"Release 1.2.0\"} | tag_name | extracts first key",
+            "{\"name\":\"Test\",\"tag_name\":\"v1.0.0\",\"description\":\"Test\"} | tag_name | extracts middle key",
+            "{\"tag_name\":\"v1.0.0-beta+build.123\"} | tag_name | preserves special chars",
+            "{\"tag_name\":\"v1.0.0\",\"other\":\"data\",\"tag_name\":\"v2.0.0\"} | tag_name | returns first of duplicates",
+        })
+        void extractsExpectedValues(String json, String key, String description) {
+            final String result = TestSupport.invokePrivate(updateChecker, "extractJsonValue", json, key);
+            assertThat(result).as(description).isNotNull();
+        }
+
+        @Test
+        @DisplayName("extracts simple value verbatim")
+        void simpleValue() {
+            final String result = TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                "{\"tag_name\":\"v1.2.0\",\"name\":\"Release 1.2.0\"}", "tag_name");
+            assertThat(result).isEqualTo("v1.2.0");
+        }
+
+        @Test
+        @DisplayName("returns first occurrence when key appears twice")
+        void firstOccurrence() {
+            final String result = TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                "{\"tag_name\":\"v1.0.0\",\"other\":\"data\",\"tag_name\":\"v2.0.0\"}", "tag_name");
+            assertThat(result).isEqualTo("v1.0.0");
+        }
+
+        @Test
+        @DisplayName("extracts empty string value")
+        void emptyValue() {
+            final String result = TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                "{\"tag_name\":\"\"}", "tag_name");
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("returns null when key is missing")
+        void keyMissing() {
+            assertThat((String) TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                "{\"name\":\"Test\"}", "tag_name")).isNull();
+        }
+
+        @Test
+        @DisplayName("returns null for empty JSON object")
+        void emptyJsonObject() {
+            assertThat((String) TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                "{}", "tag_name")).isNull();
+        }
+
+        @Test
+        @DisplayName("returns null for malformed JSON (unterminated string)")
+        void malformedJson() {
+            assertThat((String) TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                "{\"tag_name\":\"v1.0.0", "tag_name")).isNull();
+        }
+
+        @Test
+        @DisplayName("preserves escape sequences as raw text (no interpretation)")
+        void escapeSequencesNotInterpreted() {
+            // The parser must not unescape — that lets the downstream validator/logger
+            // decide what to do with suspicious payloads.
+            final String result = TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                "{\"tag_name\":\"v1.0.0\\n[SEVERE] Fake error\"}", "tag_name");
+            assertThat(result)
+                .isNotNull()
+                .contains("\\n");
+        }
+
+        @Test
+        @DisplayName("known limitation: whitespace around colons is not handled")
+        void whitespaceAroundColonNotHandled() {
+            // GitHub returns compact JSON without inter-token spaces, so this is acceptable.
+            assertThat((String) TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                "{ \"tag_name\" : \"v1.0.0\" }", "tag_name")).isNull();
+
+            // Whitespace after commas is fine
+            assertThat((String) TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                "{\"tag_name\":\"v1.0.0\", \"name\":\"Release\"}", "tag_name"))
+                .isEqualTo("v1.0.0");
+        }
+
+        @Test
+        @DisplayName("scales to large responses")
+        void largeResponse() {
+            final String largeJson = "{\"other_field\":\"" + "x".repeat(1000) + "\",\"tag_name\":\"v1.0.0\"}";
+            final String result = TestSupport.invokePrivate(updateChecker, "extractJsonValue",
+                largeJson, "tag_name");
+            assertThat(result).isEqualTo("v1.0.0");
+        }
     }
 
-    @Test
-    void testConstructor_emptyGithubRepo() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, scheduler, "");
-        });
-        assertEquals("githubRepo cannot be null or empty", exception.getMessage());
+    // ---------------------------------------------------------------------
+    // validateReleaseTag — security barrier between GitHub response and logger
+    // ---------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("validateReleaseTag — log-injection barrier (CWE-117)")
+    class ValidateReleaseTag {
+
+        @ParameterizedTest(name = "accepts [{0}] -> [{1}]")
+        @CsvSource({
+            "1.9.0,           1.9.0",
+            "v1.9.0,          1.9.0",
+            "1.9.0-rc1,       1.9.0-rc1",
+            "v1.0.0-SNAPSHOT, 1.0.0-SNAPSHOT",
+            "1.0.0+build.123, 1.0.0+build.123",
+            "1,               1",
+            "1.2,             1.2",
+            "1.2.3.4,         1.2.3.4",
+        })
+        void acceptsValidTags(String input, String expected) {
+            final String result = TestSupport.invokePrivate(updateChecker, "validateReleaseTag", input);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @ParameterizedTest(name = "rejects [{0}]")
+        @NullAndEmptySource
+        @ValueSource(strings = {
+            // Newline / control-character injection (the core attack)
+            "1.9.0\nFAKE LOG ENTRY",
+            "1.9.0\r\nFAKE",
+            "1.9.0\t",
+            "1.9.0 ",
+            // Surrounding whitespace
+            " 1.9.0",
+            "1.9 .0",
+            // HTML / shell metacharacters
+            "1.9.0<script>",
+            "1.9.0; rm -rf /",
+            "1.9.0|cat",
+            "1.9.0$(whoami)",
+            // Too many segments
+            "1.2.3.4.5",
+            // Non-numeric first segment
+            "release-1.0",
+            "vv1.0.0",
+        })
+        void rejectsInvalidTags(String tag) {
+            assertThat((String) TestSupport.invokePrivate(updateChecker, "validateReleaseTag", tag)).isNull();
+        }
     }
 
-    @Test
-    void testConstructor_invalidFormat_noSlash() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, scheduler, "invalidrepo");
-        });
-        assertEquals("githubRepo must be in format 'owner/repo', got: invalidrepo", exception.getMessage());
-    }
-
-    @Test
-    void testConstructor_validFormat() {
-        // Should not throw
-        UpdateChecker checker = new UpdateChecker(plugin, scheduler, "owner/repo");
-        assertNotNull(checker);
-    }
-
-    @Test
-    void testConstructor_rejectsSemicolonInjection() {
-        // Defense-in-depth: the URL is fixed to api.github.com, but we still
-        // reject suspicious characters in the repo segment.
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, scheduler, "owner/repo;DROP TABLE");
-        });
-        assertTrue(exception.getMessage().startsWith("githubRepo must be in format 'owner/repo'"));
-    }
-
-    @Test
-    void testConstructor_rejectsMultipleSlashes() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, scheduler, "owner/extra/repo");
-        });
-        assertTrue(exception.getMessage().startsWith("githubRepo must be in format 'owner/repo'"));
-    }
-
-    @Test
-    void testConstructor_rejectsPathTraversal() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, scheduler, "../sensitive/path");
-        });
-        assertTrue(exception.getMessage().startsWith("githubRepo must be in format 'owner/repo'"));
-    }
-
-    @Test
-    void testConstructor_rejectsCrlfInjection() {
-        // CRLF in the repo string could enable header/log injection in some contexts
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new UpdateChecker(plugin, scheduler, "owner/repo\r\nHost: evil.com");
-        });
-        assertTrue(exception.getMessage().startsWith("githubRepo must be in format 'owner/repo'"));
-    }
-
-    @Test
-    void testConstructor_acceptsValidRepoChars() {
-        // GitHub-legal owner/repo names: alphanumeric, dot, hyphen, underscore
-        assertNotNull(new UpdateChecker(plugin, scheduler, "MyOrg-1/my.repo_v2"));
-    }
-
-    @Test
-    void testCompareVersions_currentLessThanLatest() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "1.0.0", "1.1.0");
-        assertTrue(result < 0, "1.0.0 should be less than 1.1.0");
-    }
-
-    @Test
-    void testCompareVersions_currentEqualLatest() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "1.0.0", "1.0.0");
-        assertEquals(0, result, "1.0.0 should equal 1.0.0");
-    }
-
-    @Test
-    void testCompareVersions_currentGreaterThanLatest() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "2.0.0", "1.0.0");
-        assertTrue(result > 0, "2.0.0 should be greater than 1.0.0");
-    }
-
-    @Test
-    void testCompareVersions_majorVersionDifference() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "1.0.0", "2.0.0");
-        assertTrue(result < 0, "1.0.0 should be less than 2.0.0");
-    }
-
-    @Test
-    void testCompareVersions_minorVersionDifference() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "1.1.0", "1.2.0");
-        assertTrue(result < 0, "1.1.0 should be less than 1.2.0");
-    }
-
-    @Test
-    void testCompareVersions_patchVersionDifference() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "1.0.1", "1.0.2");
-        assertTrue(result < 0, "1.0.1 should be less than 1.0.2");
-    }
-
-    @Test
-    void testCompareVersions_differentLengths() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        // 1.0 vs 1.0.0 should be equal (missing parts treated as 0)
-        int result1 = (int) method.invoke(updateChecker, "1.0", "1.0.0");
-        assertEquals(0, result1, "1.0 should equal 1.0.0");
-
-        // 1.0.1 vs 1.0 should be greater
-        int result2 = (int) method.invoke(updateChecker, "1.0.1", "1.0");
-        assertTrue(result2 > 0, "1.0.1 should be greater than 1.0");
-    }
-
-    @Test
-    void testCompareVersions_singleDigit() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "1", "2");
-        assertTrue(result < 0, "1 should be less than 2");
-    }
-
-    @Test
-    void testParseVersionPart_numericOnly() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("parseVersionPart", String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "123");
-        assertEquals(123, result);
-    }
-
-    @Test
-    void testParseVersionPart_withNonNumericSuffix() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("parseVersionPart", String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "1-SNAPSHOT");
-        assertEquals(1, result);
-    }
-
-    @Test
-    void testParseVersionPart_withAlphaSuffix() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("parseVersionPart", String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "2alpha");
-        assertEquals(2, result);
-    }
-
-    @Test
-    void testParseVersionPart_emptyString() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("parseVersionPart", String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "");
-        assertEquals(0, result);
-    }
-
-    @Test
-    void testParseVersionPart_nonNumericOnly() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("parseVersionPart", String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "beta");
-        assertEquals(0, result);
-    }
-
-    @Test
-    void testExtractJsonValue_found() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        String json = "{\"tag_name\":\"v1.2.0\",\"name\":\"Release 1.2.0\"}";
-        String result = (String) method.invoke(updateChecker, json, "tag_name");
-        assertEquals("v1.2.0", result);
-    }
-
-    @Test
-    void testExtractJsonValue_foundMultipleKeys() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        String json = "{\"name\":\"Test\",\"tag_name\":\"v1.0.0\",\"description\":\"Test release\"}";
-        String result = (String) method.invoke(updateChecker, json, "tag_name");
-        assertEquals("v1.0.0", result);
-    }
-
-    @Test
-    void testExtractJsonValue_notFound() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        String json = "{\"name\":\"Test\"}";
-        String result = (String) method.invoke(updateChecker, json, "tag_name");
-        assertNull(result);
-    }
-
-    @Test
-    void testExtractJsonValue_emptyJson() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        String json = "{}";
-        String result = (String) method.invoke(updateChecker, json, "tag_name");
-        assertNull(result);
-    }
-
-    @Test
-    void testExtractJsonValue_malformedJson() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        String json = "{\"tag_name\":\"v1.0.0";  // Missing closing quote and brace
-        String result = (String) method.invoke(updateChecker, json, "tag_name");
-        assertNull(result);
-    }
-
-    @Test
-    void testExtractJsonValue_valueWithSpecialCharacters() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        String json = "{\"tag_name\":\"v1.0.0-beta+build.123\"}";
-        String result = (String) method.invoke(updateChecker, json, "tag_name");
-        assertEquals("v1.0.0-beta+build.123", result);
-    }
-
-    @Test
-    void testGetLatestVersion_initiallyNull() {
-        assertNull(updateChecker.getLatestVersion(), "Latest version should be null initially");
-    }
-
-    @Test
-    void testCompareVersions_complexVersions() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        // Test 1.2.3 vs 1.2.10 (should handle multi-digit parts correctly)
-        int result = (int) method.invoke(updateChecker, "1.2.3", "1.2.10");
-        assertTrue(result < 0, "1.2.3 should be less than 1.2.10");
-    }
-
-    @Test
-    void testCompareVersions_withSnapshot() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        // 1.0-SNAPSHOT should be treated as 1.0
-        int result = (int) method.invoke(updateChecker, "1.0-SNAPSHOT", "1.0");
-        assertEquals(0, result, "1.0-SNAPSHOT should equal 1.0 after parsing");
-    }
-
-    @Test
-    void testCompareVersions_fourPartVersions() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        int result = (int) method.invoke(updateChecker, "1.0.0.0", "1.0.0.1");
-        assertTrue(result < 0, "1.0.0.0 should be less than 1.0.0.1");
-    }
-
-    @Test
-    void testParseVersionPart_overflow() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("parseVersionPart", String.class);
-        method.setAccessible(true);
-
-        // Test with a number larger than Integer.MAX_VALUE (2147483647)
-        // This should trigger the NumberFormatException catch block
-        String overflowNumber = "999999999999999999999";
-        int result = (int) method.invoke(updateChecker, overflowNumber);
-
-        // Should return 0 when parsing fails due to overflow
-        assertEquals(0, result, "Should return 0 for numbers that overflow Integer");
-    }
-
-    @Test
-    void testExtractJsonValue_maliciousContentNotExecuted() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        // Test with JSON that contains newlines or special characters that could be used for log injection
-        // The important security aspect is that the JSON parsing itself doesn't execute/interpret this content
-        String maliciousJson = "{\"tag_name\":\"v1.0.0\\n[SEVERE] Fake error message\"}";
-        String result = (String) method.invoke(updateChecker, maliciousJson, "tag_name");
-
-        // The extraction should work but return the raw string (not executed/interpreted)
-        // The actual logging happens elsewhere and is outside the scope of extractJsonValue
-        assertNotNull(result);
-        assertTrue(result.contains("\\n"), "Newlines should be preserved as escaped characters");
-    }
-
-    @Test
-    void testParseVersionPart_veryLargeInput() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("parseVersionPart", String.class);
-        method.setAccessible(true);
-
-        // Test with an extremely long numeric string that could cause performance issues
-        String largeNumber = "9".repeat(10000);
-
-        // Should handle gracefully without hanging or crashing
-        int result = (int) method.invoke(updateChecker, largeNumber);
-        assertEquals(0, result, "Should return 0 for extremely large numbers");
-    }
-
-    @Test
-    void testExtractJsonValue_largeResponse() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        // Create a very large JSON string to test memory handling
-        String largeValue = "x".repeat(1000);
-        String largeJson = "{\"other_field\":\"" + largeValue + "\",\"tag_name\":\"v1.0.0\"}";
-
-        // Should extract correctly even with large JSON
-        String result = (String) method.invoke(updateChecker, largeJson, "tag_name");
-        assertEquals("v1.0.0", result);
-    }
-
-    @Test
-    void testCompareVersions_emptyStrings() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        // Empty versions should be treated as 0.0.0
-        int result1 = (int) method.invoke(updateChecker, "", "1.0.0");
-        assertTrue(result1 < 0, "Empty version should be less than 1.0.0");
-
-        int result2 = (int) method.invoke(updateChecker, "", "");
-        assertEquals(0, result2, "Two empty versions should be equal");
-    }
-
-    @Test
-    void testExtractJsonValue_multipleOccurrences() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        // If tag_name appears multiple times, should get the first occurrence
-        String json = "{\"tag_name\":\"v1.0.0\",\"other\":\"data\",\"tag_name\":\"v2.0.0\"}";
-        String result = (String) method.invoke(updateChecker, json, "tag_name");
-        assertEquals("v1.0.0", result, "Should extract first occurrence of tag_name");
-    }
-
-    @Test
-    void testExtractJsonValue_emptyValue() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        // tag_name with empty string value
-        String json = "{\"tag_name\":\"\"}";
-        String result = (String) method.invoke(updateChecker, json, "tag_name");
-        assertEquals("", result, "Should extract empty string value");
-    }
-
-    @Test
-    void testExtractJsonValue_whitespaceAroundColon() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("extractJsonValue", String.class, String.class);
-        method.setAccessible(true);
-
-        // Known limitation: Simple string-based parser doesn't handle whitespace around colons
-        // GitHub API returns compact JSON without extra whitespace, so this is acceptable
-        String json = "{ \"tag_name\" : \"v1.0.0\" }";
-        String result = (String) method.invoke(updateChecker, json, "tag_name");
-        assertNull(result, "Current parser doesn't handle whitespace around colons (known limitation)");
-
-        // However, whitespace after commas works fine
-        String json2 = "{\"tag_name\":\"v1.0.0\", \"name\":\"Release\"}";
-        String result2 = (String) method.invoke(updateChecker, json2, "tag_name");
-        assertEquals("v1.0.0", result2, "Whitespace after commas works correctly");
-    }
-
-    @Test
-    void testCompareVersions_veryLongVersionStrings() throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("compareVersions", String.class, String.class);
-        method.setAccessible(true);
-
-        // Test with many version parts
-        int result = (int) method.invoke(updateChecker, "1.2.3.4.5.6.7.8", "1.2.3.4.5.6.7.9");
-        assertTrue(result < 0, "Should correctly compare very long version strings");
-    }
-
-    // -------------------------------------------------------------------------
-    // validateReleaseTag — barrier between untrusted GitHub response and logger
-    // -------------------------------------------------------------------------
-
-    private String invokeValidateReleaseTag(String tag) throws Exception {
-        Method method = UpdateChecker.class.getDeclaredMethod("validateReleaseTag", String.class);
-        method.setAccessible(true);
-        return (String) method.invoke(updateChecker, tag);
-    }
-
-    @Test
-    void testValidateReleaseTag_acceptsSemverWithoutPrefix() throws Exception {
-        assertEquals("1.9.0", invokeValidateReleaseTag("1.9.0"));
-    }
-
-    @Test
-    void testValidateReleaseTag_stripsLeadingV() throws Exception {
-        assertEquals("1.9.0", invokeValidateReleaseTag("v1.9.0"));
-    }
-
-    @Test
-    void testValidateReleaseTag_acceptsPreReleaseSuffix() throws Exception {
-        assertEquals("1.9.0-rc1", invokeValidateReleaseTag("1.9.0-rc1"));
-        assertEquals("1.0.0-SNAPSHOT", invokeValidateReleaseTag("v1.0.0-SNAPSHOT"));
-    }
-
-    @Test
-    void testValidateReleaseTag_acceptsBuildMetadata() throws Exception {
-        assertEquals("1.0.0+build.123", invokeValidateReleaseTag("1.0.0+build.123"));
-    }
-
-    @Test
-    void testValidateReleaseTag_acceptsShortAndLongSegments() throws Exception {
-        assertEquals("1", invokeValidateReleaseTag("1"));
-        assertEquals("1.2", invokeValidateReleaseTag("1.2"));
-        assertEquals("1.2.3.4", invokeValidateReleaseTag("1.2.3.4"));
-    }
-
-    @Test
-    void testValidateReleaseTag_rejectsNull() throws Exception {
-        assertNull(invokeValidateReleaseTag(null));
-    }
-
-    @Test
-    void testValidateReleaseTag_rejectsEmpty() throws Exception {
-        assertNull(invokeValidateReleaseTag(""));
-    }
-
-    @Test
-    void testValidateReleaseTag_rejectsNewlineInjection() throws Exception {
-        // The whole point of the barrier: a forged tag with a newline must not pass through
-        assertNull(invokeValidateReleaseTag("1.9.0\nFAKE LOG ENTRY"));
-        assertNull(invokeValidateReleaseTag("1.9.0\r\nFAKE"));
-    }
-
-    @Test
-    void testValidateReleaseTag_rejectsControlCharacters() throws Exception {
-        assertNull(invokeValidateReleaseTag("1.9.0 "));
-        assertNull(invokeValidateReleaseTag("1.9.0\t"));
-    }
-
-    @Test
-    void testValidateReleaseTag_rejectsWhitespace() throws Exception {
-        assertNull(invokeValidateReleaseTag("1.9.0 "));
-        assertNull(invokeValidateReleaseTag(" 1.9.0"));
-        assertNull(invokeValidateReleaseTag("1.9 .0"));
-    }
-
-    @Test
-    void testValidateReleaseTag_rejectsHtmlAndShellMetacharacters() throws Exception {
-        assertNull(invokeValidateReleaseTag("1.9.0<script>"));
-        assertNull(invokeValidateReleaseTag("1.9.0; rm -rf /"));
-        assertNull(invokeValidateReleaseTag("1.9.0|cat"));
-        assertNull(invokeValidateReleaseTag("1.9.0$(whoami)"));
-    }
-
-    @Test
-    void testValidateReleaseTag_rejectsTooManySegments() throws Exception {
-        // Pattern caps at 4 segments
-        assertNull(invokeValidateReleaseTag("1.2.3.4.5"));
-    }
-
-    @Test
-    void testValidateReleaseTag_rejectsNonNumericFirstSegment() throws Exception {
-        assertNull(invokeValidateReleaseTag("release-1.0"));
-        assertNull(invokeValidateReleaseTag("vv1.0.0"));
+    // ---------------------------------------------------------------------
+    // Public API
+    // ---------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("public API")
+    class PublicApi {
+
+        @Test
+        @DisplayName("getLatestVersion() is null until checkForUpdates runs")
+        void initiallyNull() {
+            assertThat(updateChecker.getLatestVersion()).isNull();
+        }
     }
 }
