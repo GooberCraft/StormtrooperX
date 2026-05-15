@@ -6,8 +6,9 @@ We actively provide security updates for the following versions:
 
 | Version | Supported          | Minecraft Version | Java Version | Notes |
 | ------- | ------------------ | ----------------- | ------------ | ----- |
-| 1.9.x   | :white_check_mark: | 1.18 - 26.1.x     | 17+          | Current stable release (adds Folia support) |
-| 1.8.x   | :white_check_mark: | 1.18 - 26.1.x     | 17+          | Security fixes only |
+| 1.10.x  | :white_check_mark: | 1.18 - 26.1.x     | 17+          | Current stable release |
+| 1.9.x   | :white_check_mark: | 1.18 - 26.1.x     | 17+          | Security fixes only |
+| 1.8.x   | :x:                | 1.18 - 26.1.x     | 17+          | No longer supported |
 | 1.7.x   | :x:                | 1.18 - 26.1.x     | 17+          | No longer supported |
 | 1.6.x   | :x:                | 1.13 - 1.21.x     | 11+          | No longer supported |
 | < 1.6   | :x:                | N/A               | N/A          | No longer supported |
@@ -23,7 +24,7 @@ Starting with **v1.6.1**, all releases include cryptographic build attestations 
 Install [GitHub CLI](https://cli.github.com/) and verify the downloaded JAR:
 
 ```bash
-gh attestation verify StormtrooperX-1.9.0.jar --repo GooberCraft/StormtrooperX
+gh attestation verify StormtrooperX-1.10.0.jar --repo GooberCraft/StormtrooperX
 ```
 
 Successful verification confirms:

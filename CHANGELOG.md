@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-05-15
+
 ### Added
 - Permission-aware tab completion for `/stormtrooperx`: the first argument completes to only the subcommands the sender may run; the second argument of `optout`/`optin` completes to online player names for admins with `stormtrooperx.optout.others`.
 - `/stormtrooperx help` subcommand, listing only the commands the sender is permitted to run.
