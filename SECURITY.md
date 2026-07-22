@@ -24,7 +24,7 @@ Starting with **v1.6.1**, all releases include cryptographic build attestations 
 Install [GitHub CLI](https://cli.github.com/) and verify the downloaded JAR:
 
 ```bash
-gh attestation verify StormtrooperX-1.10.0.jar --repo GooberCraft/StormtrooperX
+gh attestation verify StormtrooperX-1.10.1.jar --repo GooberCraft/StormtrooperX
 ```
 
 Successful verification confirms:

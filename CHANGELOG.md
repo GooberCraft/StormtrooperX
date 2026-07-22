@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-07-22
+
 ### Changed
 - The MySQL HikariCP pool sets `driverClassName` explicitly, so connections use the bundled (shaded) Connector/J instead of falling back through `DriverManager` to whatever MySQL driver the server ships.
 - Excluded `protobuf-java` from the shaded `mysql-connector-j`, and filtered Connector/J's own X-protocol classes (`com/mysql/cj/x/**`) out of the shade — both serve only the X DevAPI, which was removed upstream in Connector/J 9.0. Removes ~7.4 MB (uncompressed) of dead classes from the JAR.
