@@ -275,6 +275,11 @@ public class DatabaseManager {
         }
 
         final HikariConfig config = new HikariConfig();
+        // Explicit driver class so Hikari loads the bundled Connector/J instead
+        // of falling back through DriverManager to whatever MySQL driver the
+        // server happens to ship. The string constant is rewritten to the
+        // relocated class name by the shade plugin at package time.
+        config.setDriverClassName("com.mysql.cj.jdbc.Driver");
         config.setJdbcUrl(jdbcUrl.toString());
         config.setUsername(username);
         config.setPassword(password);

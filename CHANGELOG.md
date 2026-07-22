@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The MySQL HikariCP pool sets `driverClassName` explicitly, so connections use the bundled (shaded) Connector/J instead of falling back through `DriverManager` to whatever MySQL driver the server ships.
+- Excluded `protobuf-java` from the shaded `mysql-connector-j`, and filtered Connector/J's own X-protocol classes (`com/mysql/cj/x/**`) out of the shade — both serve only the X DevAPI, which was removed upstream in Connector/J 9.0. Removes ~7.4 MB (uncompressed) of dead classes from the JAR.
+- Relocated `org.slf4j` (HikariCP transitive dependency) under `com.goobercraft.stormtrooperx.slf4j`, and stripped `module-info.class`, `META-INF/maven/**`, `META-INF/versions/**`, and `META-INF/native-image/**` from the shaded JAR.
+
+### Fixed
+- Shaded-JAR JDBC service files: H2 and MySQL Connector/J both provide `META-INF/services/java.sql.Driver`; previously only H2's survived shading, verbatim and unrelocated, so `ServiceLoader`-based driver discovery was broken for both bundled drivers. The shade plugin now merges and relocates service files via `ServicesResourceTransformer`.
+
+### Dependencies
+- Bumped `me.clip:placeholderapi` 2.12.2 → 2.12.3 (provided scope).
+- Bumped `org.junit.jupiter:junit-jupiter` 6.1.0 → 6.1.2 (test scope).
+
 ## [1.10.0] - 2026-05-15
 
 ### Added

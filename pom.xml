@@ -104,7 +104,7 @@
                 Output: target/bom.xml, target/bom.json.
                 The release workflow uploads both files alongside the JAR so
                 downstream consumers can audit the shaded dependency tree
-                (bStats, H2, HikariCP, MySQL Connector/J).
+                (bStats, H2, HikariCP + slf4j-api, MySQL Connector/J).
             -->
             <plugin>
                 <groupId>org.cyclonedx</groupId>
@@ -130,6 +130,48 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <!--
+                                Strip dependency metadata that is useless (or
+                                misleading) once classes are relocated: Maven
+                                descriptors, GraalVM configs referencing the
+                                original class names, and multi-release trees
+                                (inert anyway — the shaded manifest does not set
+                                Multi-Release: true).
+                            -->
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/maven/**</exclude>
+                                        <exclude>META-INF/versions/**</exclude>
+                                        <exclude>META-INF/native-image/**</exclude>
+                                    </excludes>
+                                </filter>
+                                <!--
+                                    X-protocol message classes generated for the
+                                    X DevAPI (removed upstream in Connector/J
+                                    9.0). Dead code that references the excluded
+                                    protobuf-java runtime — see the dependency
+                                    exclusion on mysql-connector-j.
+                                -->
+                                <filter>
+                                    <artifact>com.mysql:mysql-connector-j</artifact>
+                                    <excludes>
+                                        <exclude>com/mysql/cj/x/**</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <!--
+                                Merges META-INF/services files from all shaded
+                                deps and relocates their contents. Without this,
+                                H2 and MySQL both ship java.sql.Driver service
+                                files, one wins verbatim, and ServiceLoader
+                                discovery breaks for both relocated drivers.
+                            -->
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
                             <relocations>
                                 <relocation>
                                     <pattern>org.bstats</pattern>
@@ -146,6 +188,15 @@
                                 <relocation>
                                     <pattern>com.mysql</pattern>
                                     <shadedPattern>com.goobercraft.stormtrooperx.mysql</shadedPattern>
+                                </relocation>
+                                <!--
+                                    slf4j-api is pulled in transitively by
+                                    HikariCP; relocate it so no classes land at
+                                    their original coordinates in the JAR.
+                                -->
+                                <relocation>
+                                    <pattern>org.slf4j</pattern>
+                                    <shadedPattern>com.goobercraft.stormtrooperx.slf4j</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>
@@ -216,6 +267,17 @@
             <artifactId>mysql-connector-j</artifactId>
             <version>9.7.0</version>
             <scope>compile</scope>
+            <exclusions>
+                <!--
+                    protobuf is only used by the X DevAPI, which was removed
+                    upstream in Connector/J 9.0. Excluding it keeps ~4.8 MB of
+                    unrelocated com.google.protobuf classes out of the shaded JAR.
+                -->
+                <exclusion>
+                    <groupId>com.google.protobuf</groupId>
+                    <artifactId>protobuf-java</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>me.clip</groupId>
