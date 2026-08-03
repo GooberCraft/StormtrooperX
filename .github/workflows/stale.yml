@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Stale Issue and PR Management
-        uses: actions/stale@v10
+        uses: actions/stale@v11
         with:
           # General settings
           repo-token: ${{ secrets.GITHUB_TOKEN }}
