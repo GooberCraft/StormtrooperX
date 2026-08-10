@@ -61,7 +61,7 @@ jobs:
 
     # Upload to Modrinth
     - name: Publish to Modrinth
-      uses: cloudnode-pro/modrinth-publish@150bec632db186f87c686435b29c55e7543107ea # v2.5.0
+      uses: cloudnode-pro/modrinth-publish@203bc72a51ae39fba1194fc4097d9f0750c49bd3 # v2.5.1
       continue-on-error: true
       with:
         token: ${{ secrets.MODRINTH_TOKEN }}
