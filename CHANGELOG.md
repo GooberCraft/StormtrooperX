@@ -2,10 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Security
+- The bundled H2 (2.5.252, see Dependencies) includes upstream security fixes: #4381 connection-URL setting injection (values containing `;`), #4412 missing deserialization filter for `JAVA_OBJECT` values, and #4405 `SecureFileStore` skipping decryption on partial reads. Upstream links these to advisory GHSA-x6w5-3gpx-27hm, which is not yet published; no CVE is assigned. None are reachable from this plugin: the H2 URL is built from the plugin data folder plus fixed settings (`MODE=MySQL;FILE_LOCK=SOCKET`) with no config- or player-supplied values, `player_optouts` holds only `VARCHAR`/`BOOLEAN`/`TIMESTAMP` columns, and the database is not encrypted (`CIPHER=` is never set). Picked up as defense-in-depth.
+
+### Dependencies
+- Bumped `com.mysql:mysql-connector-j` 9.7.0 → 26.7.0 (shaded). The major-version jump is Oracle's realignment of Connector/J onto the server's calendar versioning — 26.7.0 supersedes 9.7, it is not a rewrite. **This raises the minimum supported MySQL server from 8.0 to 8.4** for the `mysql` database backend; because the driver is shaded, servers on MySQL 8.0 cannot swap in an older driver and should stay on 1.10.1 until they upgrade. The H2 default backend is unaffected. The 26.7.0 bug fixes (`LOAD DATA LOCAL INFILE` cleanup, X Protocol connections, `getNString` UTF-8 aliases) are all unreachable from this plugin — `allowLoadLocalInfile` is forced `false`, `com/mysql/cj/x/**` is filtered out of the shade, and the N-character `ResultSet` methods are unused. No CVEs are addressed by Connector/J 26.7.0.
+- Bumped `org.cyclonedx:cyclonedx-maven-plugin` 2.9.2 → 2.9.3 (build scope).
+- Bumped `com.h2database:h2` 2.4.240 → 2.5.252 (shaded; default backend). Security fixes are listed under Security; this range also brings MVStore corruption/data-race fixes relevant to the file-backed store (#4387 "double mark" corruption on reopen after `SHUTDOWN`, #4374 chunk-rewrite data race, #4343 stop on panic to prevent store corruption). Verified that a database file written by 2.4.240 (the version shipped in 1.10.1) opens, reads, and accepts `MERGE INTO ... KEY(uuid)` upserts under 2.5.252 — no export/import migration needed for existing opt-out data.
+- Bumped `maven-compiler-plugin` 3.15.0 → 3.16.0 and `maven-surefire-plugin` 3.5.6 → 3.6.0 (build scope).
+- Bumped `org.junit.jupiter:junit-jupiter` 6.1.2 → 6.1.3 (test scope).
+- Bumped Mockito (core + junit-jupiter) 5.23.0 → 5.24.0 (test scope).
+
+### Build
+- Bumped `actions/setup-java` 5 → 6 (6.1.0). v6 is an internal ESM migration (same `node24` runtime) and additionally verifies JDK downloads against vendor checksums. `build.yml` and `codeql.yml` track the floating `@v6` major tag again — Dependabot had rewritten them to exact `@v6.0.1`; `release.yml` stays SHA-pinned.
+- Bumped `actions/attest-build-provenance` 4.1.1 → 4.2.2, `softprops/action-gh-release` 3.0.2 → 3.0.3, and `cloudnode-pro/modrinth-publish` 2.5.0 → 2.5.2 (`release.yml`, SHA-pinned).
 
 ## [1.10.1] - 2026-07-22
 

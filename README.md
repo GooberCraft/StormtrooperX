@@ -158,6 +158,11 @@ debug: false
 - **piglin**: Piglin mobs. Default: enabled, accuracy 0.7
 
 **Database Settings:**
+
+> **MySQL server requirement:** the bundled Connector/J driver requires **MySQL Server 8.4 or later**.
+> Plugin versions up to 1.10.1 shipped a driver supporting 8.0+; if your server runs MySQL 8.0, either
+> upgrade the server or stay on 1.10.1. The default `h2` backend has no external server requirement.
+
 - **database.type**: Database type - `h2` (embedded, default) or `mysql`
 - **database.mysql.host**: MySQL server hostname. Default: localhost
 - **database.mysql.port**: MySQL server port. Default: 3306
