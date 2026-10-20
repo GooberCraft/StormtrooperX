@@ -360,6 +360,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[Unreleased]: https://github.com/GooberCraft/StormtrooperX/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.11.0
+[1.10.1]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.10.1
+[1.10.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.10.0
+[1.9.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.9.0
+[1.8.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.8.0
+[1.7.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.7.0
+[1.6.3]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.6.3
 [1.6.2]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.6.2
 [1.6.1]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.6.1
 [1.6.0]: https://github.com/GooberCraft/StormtrooperX/releases/tag/v1.6.0
