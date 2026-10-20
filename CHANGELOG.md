@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Supported Minecraft range extended to **1.18 – 26.3.x** (was 26.1.x). No code changes were needed — `src/main` is unchanged since 1.10.1, so 1.10.1 itself runs on 26.2/26.3. Verified by: compiling and running the full test suite against the Spigot 26.2 and 26.3 APIs; resolving every Bukkit/PlaceholderAPI method and field reference in the 1.18.1-compiled JAR against the Spigot 26.2/26.3, Paper 26.3, and Folia 26.3 APIs (0 linkage failures, including the reflectively-bound Folia scheduler methods); and a live Paper 26.3 (build 207) server run in which Skeleton, Stray, Bogged, Parched, Pillager, and Piglin shots were all nerfed with projectile speed preserved, including after `/stx reload`. Spigot and Folia 26.3 were not run live (Folia 26.3 is still alpha upstream). Modrinth listings now include 26.2.x and 26.3.x.
+
 ### Security
 - The bundled H2 (2.5.252, see Dependencies) includes upstream security fixes: #4381 connection-URL setting injection (values containing `;`), #4412 missing deserialization filter for `JAVA_OBJECT` values, and #4405 `SecureFileStore` skipping decryption on partial reads. Upstream links these to advisory GHSA-x6w5-3gpx-27hm, which is not yet published; no CVE is assigned. None are reachable from this plugin: the H2 URL is built from the plugin data folder plus fixed settings (`MODE=MySQL;FILE_LOCK=SOCKET`) with no config- or player-supplied values, `player_optouts` holds only `VARCHAR`/`BOOLEAN`/`TIMESTAMP` columns, and the database is not encrypted (`CIPHER=` is never set). Picked up as defense-in-depth.
 
@@ -20,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Build
 - Bumped `actions/setup-java` 5 → 6 (6.1.0). v6 is an internal ESM migration (same `node24` runtime) and additionally verifies JDK downloads against vendor checksums. `build.yml` and `codeql.yml` track the floating `@v6` major tag again — Dependabot had rewritten them to exact `@v6.0.1`; `release.yml` stays SHA-pinned.
+- CI `ceiling` job (renamed "Ceiling compat (26.3 API)") now compiles and tests against `spigot-api` `26.3-R0.1-SNAPSHOT` (was `26.1.2-R0.1-SNAPSHOT`); the 26.3 API is still Java 17 bytecode, so the job stays on Java 25 to mirror the server runtime.
 - Bumped `actions/attest-build-provenance` 4.1.1 → 4.2.2, `softprops/action-gh-release` 3.0.2 → 3.0.3, and `cloudnode-pro/modrinth-publish` 2.5.0 → 2.5.2 (`release.yml`, SHA-pinned).
 
 ## [1.10.1] - 2026-07-22

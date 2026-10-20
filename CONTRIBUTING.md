@@ -249,7 +249,7 @@ StormtrooperX/
 
 ### Minecraft Version
 - **Minimum**: 1.18
-- **Current**: 1.21.x – 26.1.x
+- **Current**: 1.21.x – 26.3.x
 - Handle version-specific features gracefully (see Bogged/Parched mob handling)
 
 ### Server Software

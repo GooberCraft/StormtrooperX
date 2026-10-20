@@ -254,7 +254,7 @@ This repository includes GitHub Actions workflows:
 
 ## Compatibility
 
-- **Minecraft Version**: 1.18 - 26.1.x (and future versions)
+- **Minecraft Version**: 1.18 - 26.3.x (and future versions)
 - **Server Software**: Spigot, Paper, Purpur, Folia, or any Spigot-based server
 - **Java Version**: 17+ (tested on Java 17, 21, and 25)
 

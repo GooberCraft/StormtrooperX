@@ -324,7 +324,7 @@
         <profile>
             <id>ceiling</id>
             <properties>
-                <spigot.api.version>26.1.2-R0.1-SNAPSHOT</spigot.api.version>
+                <spigot.api.version>26.3-R0.1-SNAPSHOT</spigot.api.version>
             </properties>
         </profile>
     </profiles>

@@ -84,14 +84,14 @@ jobs:
 
   # Forward-compatibility check: the main build targets the 1.18.1 API floor,
   # this compiles and tests against the newest supported API (the `ceiling`
-  # Maven profile pins spigot-api to 26.1.x). Blocking, so a forward-incompat
+  # Maven profile pins spigot-api to 26.3). Blocking, so a forward-incompat
   # change can't merge. The ceiling is a SNAPSHOT, so this may go red when the
   # upstream API moves even without a code change here — that's the signal.
-  # Runs on Java 25 to mirror the real 26.1 server runtime, which requires
+  # Runs on Java 25 to mirror the real 26.x server runtime, which requires
   # Java 25 (the spigot-api artifact is still Java 17 bytecode, but the server
   # itself won't start on anything lower).
   ceiling:
-    name: Ceiling compat (26.1 API)
+    name: Ceiling compat (26.3 API)
     runs-on: ubuntu-latest
 
     permissions:
