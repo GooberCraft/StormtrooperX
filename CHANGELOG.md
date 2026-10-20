@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-20
+
 ### Changed
 - Supported Minecraft range extended to **1.18 – 26.3.x** (was 26.1.x). No code changes were needed — `src/main` is unchanged since 1.10.1, so 1.10.1 itself runs on 26.2/26.3. Verified by: compiling and running the full test suite against the Spigot 26.2 and 26.3 APIs; resolving every Bukkit/PlaceholderAPI method and field reference in the 1.18.1-compiled JAR against the Spigot 26.2/26.3, Paper 26.3, and Folia 26.3 APIs (0 linkage failures, including the reflectively-bound Folia scheduler methods); and a live Paper 26.3 (build 207) server run in which Skeleton, Stray, Bogged, Parched, Pillager, and Piglin shots were all nerfed with projectile speed preserved, including after `/stx reload`. Spigot and Folia 26.3 were not run live (Folia 26.3 is still alpha upstream). Modrinth listings now include 26.2.x and 26.3.x.
 
